@@ -185,6 +185,8 @@
 }
 
 .canvas-header {
+  position: relative;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -234,6 +236,7 @@
 
 .canvas-wrap {
   position: relative;
+  z-index: 1;
   min-height: 0;
   height: 100%;
   width: 100%;
