@@ -636,6 +636,19 @@
     width: 40px;
     height: 40px;
   }
+
+  /* Header controls sit inside a narrow, clipped workspace on phones. Anchor
+     the page-font choices to the viewport so every option remains visible. */
+  .write-header .font-popover {
+    position: fixed;
+    top: calc(68px + env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 156px - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
 }
 
 /* Desktop (mouse): Notion-style — no fixed toolbar; select text for the
