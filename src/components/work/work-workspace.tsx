@@ -2,11 +2,13 @@
 
 import { ExternalLink, RefreshCw, TimerReset } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useI18n } from '@/lib/i18n'
 import './work.css'
 
 const DEFAULT_URL = 'https://tanflow.vercel.app/'
 
 export default function WorkWorkspace() {
+  const { t } = useI18n()
   const url = process.env.NEXT_PUBLIC_TANFLOW_URL || DEFAULT_URL
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [key, setKey] = useState(0)
@@ -35,8 +37,8 @@ export default function WorkWorkspace() {
           <button
             className="icon-button"
             onClick={reload}
-            title="Reload workspace"
-            aria-label="Reload TanFlow"
+            title={t('Reload workspace')}
+            aria-label={t('Reload TanFlow')}
           >
             <RefreshCw size={17} />
           </button>
@@ -46,10 +48,10 @@ export default function WorkWorkspace() {
             href={url}
             target="_blank"
             rel="noreferrer"
-            title="Open TanFlow in external tab"
+            title={t('Open TanFlow in external tab')}
           >
             <ExternalLink size={15} />
-            <span>Open in new tab</span>
+            <span>{t('Open in new tab')}</span>
           </a>
         </div>
       </header>
@@ -58,22 +60,22 @@ export default function WorkWorkspace() {
         {state === 'loading' && (
           <div className="frame-status">
             <div className="spinner" />
-            <h2>Opening TanFlow</h2>
+            <h2>{t('Opening TanFlow')}</h2>
           </div>
         )}
 
         {state === 'error' && (
           <div className="frame-status error">
-            <h2>TanFlow could not be embedded</h2>
+            <h2>{t('TanFlow could not be embedded')}</h2>
             <p>
-              The host may block iframes, be offline, or be taking too long. Your safest option is to open the original workspace directly.
+              {t('The host may block iframes, be offline, or be taking too long. Your safest option is to open the original workspace directly.')}
             </p>
             <div>
               <a className="button primary" href={url} target="_blank" rel="noreferrer">
-                <ExternalLink size={15} /> Open TanFlow
+                <ExternalLink size={15} /> {t('Open TanFlow')}
               </a>
               <button className="button" onClick={reload}>
-                <RefreshCw size={15} /> Try again
+                <RefreshCw size={15} /> {t('Try again')}
               </button>
             </div>
           </div>

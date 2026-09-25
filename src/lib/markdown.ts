@@ -40,6 +40,8 @@ const block = (node: JSONContent): string => {
       return children.map(block).join('\n\n').split('\n').map(l => `> ${l}`.trimEnd()).join('\n')
     case 'codeBlock':
       return `\`\`\`${node.attrs?.language ?? ''}\n${children.map(c => c.text ?? '').join('')}\n\`\`\``
+    case 'image':
+      return `![${node.attrs?.alt ?? ''}](${node.attrs?.src ?? ''})`
     case 'horizontalRule':
       return '---'
     case 'bulletList':
@@ -99,6 +101,12 @@ export function markdownToHtml(markdown: string): string {
       while (i < lines.length && !lines[i].startsWith('```')) code.push(lines[i++])
       i++
       out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+      continue
+    }
+    const image = line.match(/^!\[([^\]]*)\]\(((?:https?:|data:image\/)[^)\s]+)\)\s*$/)
+    if (image) {
+      out.push(`<img src="${escapeHtml(image[2])}" alt="${escapeHtml(image[1])}">`)
+      i++
       continue
     }
     const heading = line.match(/^(#{1,6})\s+(.*)$/)

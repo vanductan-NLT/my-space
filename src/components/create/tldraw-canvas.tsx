@@ -6,12 +6,15 @@ import { useEffect, useRef } from 'react'
 export default function TldrawCanvas({
   snapshot,
   theme = 'dark',
+  locale = 'en',
   onChange,
   onEditor,
   onLoadError,
 }: {
   snapshot: unknown
   theme?: 'dark' | 'light'
+  /** tldraw's own interface language (it ships a Vietnamese translation). */
+  locale?: 'vi' | 'en'
   onChange: (snapshot: unknown) => void
   onEditor: (editor: Editor) => void
   onLoadError: () => void
@@ -23,9 +26,9 @@ export default function TldrawCanvas({
 
   useEffect(() => {
     if (currentEditor.current) {
-      currentEditor.current.user.updateUserPreferences({ colorScheme: theme })
+      currentEditor.current.user.updateUserPreferences({ colorScheme: theme, locale })
     }
-  }, [theme])
+  }, [theme, locale])
 
   return (
     <Tldraw
@@ -33,7 +36,7 @@ export default function TldrawCanvas({
       onMount={editor => {
         currentEditor.current = editor
         onEditor(editor)
-        editor.user.updateUserPreferences({ colorScheme: theme })
+        editor.user.updateUserPreferences({ colorScheme: theme, locale })
         if (snapshot) {
           try {
             loadSnapshot(editor.store, snapshot as Parameters<typeof loadSnapshot>[1])

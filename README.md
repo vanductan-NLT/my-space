@@ -1,5 +1,11 @@
 # My Space
 
+**Open source** — https://github.com/vanductan-NLT/my-space. Clone it, run it locally (see below) or open a pull request.
+
+```bash
+git clone https://github.com/vanductan-NLT/my-space.git
+```
+
 A calm, private workspace with three focused modes: a rich local-first writer, an infinite tldraw canvas, and the existing TanFlow work experience. There are no accounts, application servers, analytics, or content APIs. Documents and boards stay in the browser.
 
 ## Routes

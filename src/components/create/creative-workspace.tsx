@@ -1,6 +1,6 @@
 'use client'
 
-import { Copy, Download, PanelLeftClose, Plus, PanelLeftOpen, Pencil, Save, Trash2, Upload, X } from 'lucide-react'
+import { Aperture, Camera, Copy, Download, ImageDown, PanelLeftClose, Plus, PanelLeftOpen, Pencil, Save, Trash2, Upload, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from 'tldraw'
@@ -8,9 +8,14 @@ import { db, isQuotaError } from '@/lib/db'
 import { useAutosave } from '@/lib/use-autosave'
 import { Modal } from '../modal'
 import { SaveIndicator } from '../save-indicator'
+import { MenuButton } from '../menu-button'
+import { CaptureScreenButton } from '../screen-capture'
+import { sendImage, takeImage } from '@/lib/image-inbox'
+import { useRouter } from 'next/navigation'
 import { newBoard, type LocalBoard, type SaveState } from '@/lib/models'
 import { timeAgo } from '@/lib/time'
 import { useTheme } from '../theme-context'
+import { detectLang, getLang, rich, translate, useI18n } from '@/lib/i18n'
 import './create.css'
 
 const Canvas = dynamic(() => import('./tldraw-canvas'), {
@@ -18,7 +23,7 @@ const Canvas = dynamic(() => import('./tldraw-canvas'), {
   loading: () => (
     <div className="center-state">
       <div className="spinner" />
-      <p>Loading the infinite canvas…</p>
+      <p>{translate('Loading the infinite canvas…', undefined, getLang())}</p>
     </div>
   ),
 })
@@ -32,6 +37,11 @@ const download = (name: string, value: unknown) => {
 }
 
 export default function CreativeWorkspace() {
+  const { t, lang } = useI18n()
+  const router = useRouter()
+  // An image to drop onto the board once its canvas is ready (from Frame).
+  const pendingImage = useRef<File | null>(null)
+  const titleOf = (title: string) => (!title || title === 'Untitled board' || title === 'Bảng vẽ chưa đặt tên' ? t('Untitled board') : title)
   const [boards, setBoards] = useState<LocalBoard[]>([])
   const [activeId, setActiveId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -59,7 +69,7 @@ export default function CreativeWorkspace() {
   const autosave = useAutosave<Partial<Pick<LocalBoard, 'title' | 'snapshot'>>>({
     delay: 900,
     write: async (id, patch) => {
-      const title = patch.title === undefined ? {} : { title: patch.title.trim() || 'Untitled board' }
+      const title = patch.title === undefined ? {} : { title: patch.title.trim() || t('Untitled board') }
       await db.boards.update(id, { ...patch, ...title, updatedAt: new Date().toISOString() })
     },
     onSaving: () => setSave('saving'),
@@ -73,8 +83,8 @@ export default function CreativeWorkspace() {
       setSave('error')
       setNotice({
         text: isQuotaError(err)
-          ? 'Browser storage is full. Export this board now; the canvas remains open.'
-          : 'The board could not be saved. Export it before leaving.',
+          ? t('Browser storage is full. Export this board now; the canvas remains open.')
+          : t('The board could not be saved. Export it before leaving.'),
         error: true,
         offerExport: true,
       })
@@ -112,13 +122,20 @@ export default function CreativeWorkspace() {
         let all = await db.boards.toArray()
         if (!all.length) {
           // Fixed id + put: seeding twice (StrictMode, two tabs) can't create duplicates.
-          const first = { ...newBoard('Ideas board'), id: 'first-board' }
+          const first = { ...newBoard(translate('Ideas board', undefined, detectLang())), id: 'first-board' }
           await db.boards.put(first)
           all = [first]
         }
-        await refresh()
+        const incoming = takeImage('create')
+        if (incoming) {
+          // Arrived from Frame → "Annotate in Create": a fresh board with the image on it.
+          const b = newBoard(translate('Screenshot', undefined, detectLang()))
+          await db.boards.add(b)
+          pendingImage.current = new File([incoming], 'screenshot.png', { type: 'image/png' })
+          await refresh(b.id)
+        } else await refresh()
       } catch {
-        setNotice({ text: 'Canvas storage is unavailable. You can draw, but export before leaving.', error: true })
+        setNotice({ text: translate('Canvas storage is unavailable. You can draw, but export before leaving.', undefined, detectLang()), error: true })
       } finally {
         setLoading(false)
       }
@@ -142,7 +159,7 @@ export default function CreativeWorkspace() {
 
   const create = async () => {
     await autosave.flush()
-    const b = newBoard()
+    const b = newBoard(t('Untitled board'))
     await db.boards.add(b)
     await refresh(b.id)
   }
@@ -154,7 +171,7 @@ export default function CreativeWorkspace() {
 
   const confirmRename = async () => {
     if (!boardToRename) return
-    const title = renameInput.trim() || 'Untitled board'
+    const title = renameInput.trim() || t('Untitled board')
     await db.boards.update(boardToRename.id, { title, updatedAt: new Date().toISOString() })
     setBoards(v => v.map(b => (b.id === boardToRename.id ? { ...b, title } : b)))
     setBoardToRename(null)
@@ -171,13 +188,13 @@ export default function CreativeWorkspace() {
     const copy = {
       ...b,
       id: crypto.randomUUID(),
-      title: `${b.title} (Copy)`,
+      title: t('{title} (Copy)', { title: titleOf(b.title) }),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
     await db.boards.add(copy)
     await refresh(copy.id)
-    setNotice({ text: `Duplicated "${copy.title}"` })
+    setNotice({ text: t('Duplicated "{title}"', { title: copy.title }) })
   }
 
   const confirmDelete = async () => {
@@ -193,13 +210,72 @@ export default function CreativeWorkspace() {
     } else {
       await refresh(rest[0].id)
     }
-    setNotice({ text: `Deleted "${target.title}"` })
+    setNotice({ text: t('Deleted "{title}"', { title: titleOf(target.title) }) })
+  }
+
+  // Picture of the drawing: the selection if there is one, else the whole page.
+  const capture = (mode: 'copy' | 'save') => {
+    const editor = editorRef.current
+    if (!editor || !active) return
+    const selected = editor.getSelectedShapeIds()
+    const ids = selected.length ? selected : [...editor.getCurrentPageShapeIds()]
+    if (!ids.length) {
+      setNotice({ text: t('Draw something first, then capture it.') })
+      return
+    }
+    const image = editor.toImage(ids, { format: 'png', background: true, padding: 24, scale: 2 }).then(r => r.blob)
+    const sel = selected.length > 0
+    if (mode === 'copy' && typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      // Hand the clipboard a promise so Safari keeps the click's permission.
+      navigator.clipboard
+        .write([new ClipboardItem({ 'image/png': image })])
+        .then(() => setNotice({ text: t(sel ? 'Selection copied as an image — paste it anywhere.' : 'Board copied as an image — paste it anywhere.') }))
+        .catch(() => void saveBlob(image, t("Copying isn't allowed here, so the image was saved instead.")))
+      return
+    }
+    void saveBlob(image, t(sel ? 'Selection saved as PNG.' : 'Board saved as PNG.'))
+  }
+
+  const saveBlob = async (image: Promise<Blob>, message: string) => {
+    try {
+      const blob = await image
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `${(active?.title || 'board').replace(/[^\p{L}\p{N} _-]/gu, '').trim() || 'board'}.png`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setNotice({ text: message })
+    } catch {
+      setNotice({ text: t('The image could not be created.'), error: true })
+    }
+  }
+
+  const placeImage = async (file: File) => {
+    const editor = editorRef.current
+    if (!editor) return
+    await editor.putExternalContent({ type: 'files', files: [file], point: editor.getViewportPageBounds().center })
+    editor.zoomToSelection({ animation: { duration: 300 } })
+  }
+
+  const frameIt = async () => {
+    const editor = editorRef.current
+    if (!editor) return
+    const selected = editor.getSelectedShapeIds()
+    const ids = selected.length ? selected : [...editor.getCurrentPageShapeIds()]
+    if (!ids.length) return setNotice({ text: t('Draw something first, then capture it.') })
+    try {
+      const { blob } = await editor.toImage(ids, { format: 'png', background: true, padding: 16, scale: 2 })
+      sendImage('frame', blob)
+      router.push('/frame')
+    } catch {
+      setNotice({ text: t('The image could not be created.'), error: true })
+    }
   }
 
   const boardLoadFailed = (id: string) => {
     setUnreadable(v => (v.includes(id) ? v : [...v, id]))
     setNotice({
-      text: 'This board could not be opened, so changes to it are not saved. Export it to keep the original.',
+      text: t('This board could not be opened, so changes to it are not saved. Export it to keep the original.'),
       error: true,
       offerExport: true,
     })
@@ -233,13 +309,13 @@ export default function CreativeWorkspace() {
         })
       }
       await autosave.flush()
-      const b = newBoard(data.title || file.name.replace(/(\.tldr)?(\.json)?$/i, '') || 'Imported board')
+      const b = newBoard(data.title || file.name.replace(/(\.tldr)?(\.json)?$/i, '') || t('Imported board'))
       b.snapshot = snapshot
       await db.boards.add(b)
       await refresh(b.id)
-      setNotice({ text: `Board "${b.title}" imported.` })
+      setNotice({ text: t('Board "{title}" imported.', { title: b.title }) })
     } catch {
-      setNotice({ text: 'This file is not a board that My Space or tldraw can open. Nothing was imported.', error: true })
+      setNotice({ text: t('This file is not a board that My Space or tldraw can open. Nothing was imported.'), error: true })
     } finally {
       if (fileRef.current) fileRef.current.value = ''
     }
@@ -249,7 +325,6 @@ export default function CreativeWorkspace() {
     return (
       <div className="center-state">
         <div className="spinner" />
-        <p>Restoring boards…</p>
       </div>
     )
   }
@@ -257,11 +332,11 @@ export default function CreativeWorkspace() {
   return (
     <div className="creative">
       {/* Board Panel Sidebar */}
-      <aside className={`board-panel ${panel ? '' : 'closed'}`} aria-label="Boards navigation">
+      <aside className={`board-panel ${panel ? '' : 'closed'}`} aria-label={t('Boards navigation')}>
         <div className="board-heading">
-          <h1>Boards</h1>
-          <button type="button" className="new-btn" onClick={create} aria-label="New board">
-            <Plus size={15} /> New
+          <h1>{t('Boards')}</h1>
+          <button type="button" className="new-btn" onClick={create} aria-label={t('New board')}>
+            <Plus size={15} /> {t('New')}
           </button>
         </div>
 
@@ -277,7 +352,7 @@ export default function CreativeWorkspace() {
                   aria-current={isActive ? 'true' : undefined}
                 >
                   <span className="board-copy">
-                    <strong>{b.title}</strong>
+                    <strong>{titleOf(b.title)}</strong>
                     <small>{timeAgo(b.updatedAt)}</small>
                   </span>
                 </button>
@@ -286,8 +361,8 @@ export default function CreativeWorkspace() {
                   <button
                     type="button"
                     className="board-action-btn"
-                    title="Rename board"
-                    aria-label={`Rename ${b.title}`}
+                    title={t('Rename board')}
+                    aria-label={t('Rename {title}', { title: titleOf(b.title) })}
                     onClick={e => {
                       e.stopPropagation()
                       openRenameModal(b)
@@ -298,8 +373,8 @@ export default function CreativeWorkspace() {
                   <button
                     type="button"
                     className="board-action-btn"
-                    title="Duplicate board"
-                    aria-label={`Duplicate ${b.title}`}
+                    title={t('Duplicate board')}
+                    aria-label={t('Duplicate {title}', { title: titleOf(b.title) })}
                     onClick={e => {
                       e.stopPropagation()
                       void duplicate(b)
@@ -310,8 +385,8 @@ export default function CreativeWorkspace() {
                   <button
                     type="button"
                     className="board-action-btn delete-btn"
-                    title="Delete board"
-                    aria-label={`Delete ${b.title}`}
+                    title={t('Delete board')}
+                    aria-label={t('Delete {title}', { title: titleOf(b.title) })}
                     onClick={e => {
                       e.stopPropagation()
                       setBoardToDelete(b)
@@ -327,7 +402,7 @@ export default function CreativeWorkspace() {
 
         <div className="board-footer">
           <button className="button" onClick={() => fileRef.current?.click()}>
-            <Upload size={15} /> Import board
+            <Upload size={15} /> {t('Import board')}
           </button>
           <input
             ref={fileRef}
@@ -336,11 +411,11 @@ export default function CreativeWorkspace() {
             accept=".json,.tldr"
             onChange={e => void importBoard(e.target.files?.[0])}
           />
-          <p>Stored only in this browser. PNG and SVG export are in the canvas menu.</p>
+          <p>{t('Stored only in this browser. PNG and SVG export are in the canvas menu.')}</p>
         </div>
       </aside>
 
-      {panel && <button type="button" className="panel-scrim" aria-label="Close boards" onClick={() => setPanel(false)} />}
+      {panel && <button type="button" className="panel-scrim" aria-label={t('Close boards')} onClick={() => setPanel(false)} />}
 
       {/* Canvas Area */}
       <section className="canvas-area">
@@ -348,8 +423,8 @@ export default function CreativeWorkspace() {
           <button
             className="icon-button"
             onClick={() => setPanel(v => !v)}
-            aria-label={panel ? 'Hide boards sidebar' : 'Show boards sidebar'}
-            title={panel ? 'Hide sidebar' : 'Show sidebar'}
+            aria-label={t(panel ? 'Hide boards sidebar' : 'Show boards sidebar')}
+            title={t(panel ? 'Hide sidebar' : 'Show sidebar')}
           >
             {panel ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
           </button>
@@ -360,9 +435,9 @@ export default function CreativeWorkspace() {
                 className="header-title-input"
                 value={active.title}
                 onChange={e => updateHeaderTitle(e.target.value)}
-                aria-label="Board title"
-                title="Click to rename board"
-                placeholder="Untitled board"
+                aria-label={t('Board title')}
+                title={t('Click to rename board')}
+                placeholder={t('Untitled board')}
               />
             )}
           </div>
@@ -370,6 +445,27 @@ export default function CreativeWorkspace() {
           <SaveIndicator state={save} blocked={activeUnreadable} />
 
           <div className="canvas-header-actions">
+            {active && (
+              <MenuButton
+                label={t('Capture')}
+                icon={<Camera size={15} />}
+                items={[
+                  { label: t('Copy image'), hint: t('paste anywhere'), icon: <Copy size={15} />, onSelect: () => capture('copy') },
+                  { label: t('Save PNG'), icon: <ImageDown size={15} />, onSelect: () => capture('save') },
+                  'separator',
+                  { label: t('Frame it'), icon: <Aperture size={15} />, onSelect: () => void frameIt() },
+                ]}
+              />
+            )}
+            {active && (
+              <CaptureScreenButton
+                onImage={file => {
+                  void placeImage(file)
+                  setNotice({ text: t('Screenshot added to the board.') })
+                }}
+                onError={text => setNotice({ text, error: true })}
+              />
+            )}
             {active && (
               <button
                 className="icon-button"
@@ -381,8 +477,8 @@ export default function CreativeWorkspace() {
                     snapshot: active.snapshot,
                   })
                 }
-                title="Export board (.json)"
-                aria-label="Export board"
+                title={t('Export board (.json)')}
+                aria-label={t('Export board')}
               >
                 <Download size={17} />
               </button>
@@ -396,7 +492,16 @@ export default function CreativeWorkspace() {
               key={active.id}
               snapshot={active.snapshot}
               theme={theme}
-              onEditor={e => (editorRef.current = e)}
+              locale={lang}
+              onEditor={e => {
+                editorRef.current = e
+                const file = pendingImage.current
+                if (file) {
+                  pendingImage.current = null
+                  // Let the board finish loading its snapshot first.
+                  setTimeout(() => void placeImage(file), 50)
+                }
+              }}
               onChange={snapshot => {
                 if (!unreadableRef.current.includes(active.id)) autosave.queue(active.id, { snapshot })
               }}
@@ -408,13 +513,13 @@ export default function CreativeWorkspace() {
 
       {/* Rename Board Modal */}
       {boardToRename && (
-        <Modal title="Rename board" onClose={() => setBoardToRename(null)}>
+        <Modal title={t('Rename board')} onClose={() => setBoardToRename(null)}>
           <input
             className="input"
             value={renameInput}
             onChange={e => setRenameInput(e.target.value)}
-            placeholder="Board name"
-            aria-label="Board name"
+            placeholder={t('Board name')}
+            aria-label={t('Board name')}
             data-autofocus
             onKeyDown={e => {
               if (e.key === 'Enter') void confirmRename()
@@ -422,10 +527,10 @@ export default function CreativeWorkspace() {
           />
           <div className="modal-footer">
             <button type="button" className="button" onClick={() => setBoardToRename(null)}>
-              Cancel
+              {t('Cancel')}
             </button>
             <button type="button" className="button primary" onClick={() => void confirmRename()}>
-              Save name
+              {t('Save name')}
             </button>
           </div>
         </Modal>
@@ -433,17 +538,17 @@ export default function CreativeWorkspace() {
 
       {/* Delete Board Confirmation Modal */}
       {boardToDelete && (
-        <Modal title="Delete board" onClose={() => setBoardToDelete(null)}>
+        <Modal title={t('Delete board')} onClose={() => setBoardToDelete(null)}>
           <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-            Are you sure you want to delete <strong>“{boardToDelete.title}”</strong>? This action cannot be undone.
+            {rich(t('Are you sure you want to delete **“{title}”**? This action cannot be undone.', { title: titleOf(boardToDelete.title) }))}
           </p>
           <div className="modal-footer">
             {/* Cancel takes focus: Enter must never delete by accident. */}
             <button type="button" className="button" onClick={() => setBoardToDelete(null)} data-autofocus>
-              Cancel
+              {t('Cancel')}
             </button>
             <button type="button" className="button danger" onClick={() => void confirmDelete()}>
-              Delete
+              {t('Delete')}
             </button>
           </div>
         </Modal>
@@ -453,12 +558,12 @@ export default function CreativeWorkspace() {
       {notice && (
         <div className={`toast ${notice.error ? 'error' : ''}`} role="status">
           <span>{notice.text}</span>
-          <button className="icon-button" onClick={() => setNotice(null)} aria-label="Dismiss notification">
+          <button className="icon-button" onClick={() => setNotice(null)} aria-label={t('Dismiss notification')}>
             <X size={16} />
           </button>
           {notice.offerExport && active && (
             <button className="button" onClick={() => download(`${active.title}.json`, active.snapshot)}>
-              <Save size={14} /> Export now
+              <Save size={14} /> {t('Export now')}
             </button>
           )}
         </div>

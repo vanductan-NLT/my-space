@@ -32,6 +32,13 @@ describe('markdownToHtml', () => {
     expect(html).toBe('<h1>Title</h1><p>Some <strong>bold</strong> and <em>it</em>.</p><ul><li><p>a</p></li><li><p>b</p></li></ul><ol><li><p>x</p></li></ol><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>todo</p></li></ul><blockquote><p>q</p></blockquote>')
   })
 
+  it('round-trips images', () => {
+    const doc = { type: 'doc', content: [{ type: 'image', attrs: { src: 'data:image/png;base64,AAAA', alt: 'shot' } }] }
+    expect(toMarkdown(doc)).toBe('![shot](data:image/png;base64,AAAA)\n')
+    expect(markdownToHtml('![shot](data:image/png;base64,AAAA)')).toBe('<img src="data:image/png;base64,AAAA" alt="shot">')
+    expect(markdownToHtml('![x](javascript:alert)')).not.toContain('<img')
+  })
+
   it('escapes HTML and drops unsafe links', () => {
     expect(markdownToHtml('<script>x</script> [a](javascript:alert)')).toBe('<p>&lt;script&gt;x&lt;/script&gt; a</p>')
   })

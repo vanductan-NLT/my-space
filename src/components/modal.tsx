@@ -3,6 +3,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useI18n } from '@/lib/i18n'
 
 const FOCUSABLE = 'input, button, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'
 
@@ -24,6 +25,7 @@ export function Modal({
   sheet?: boolean
 }) {
   const titleId = useId()
+  const { t } = useI18n()
   const dialog = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export function Modal({
       <div ref={dialog} className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={onKeyDown}>
         <div className="modal-header">
           <h3 id={titleId}>{title}</h3>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-button" onClick={onClose} aria-label={t('Close')}>
             <X size={18} />
           </button>
         </div>

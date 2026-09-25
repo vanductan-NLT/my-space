@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { ThemeProvider } from '@/components/theme-context'
+import { I18nProvider } from '@/lib/i18n'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -15,14 +16,25 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
-// Runs before React: applies the saved theme before first paint (no flash of
-// the wrong theme) and keeps the browser's install prompt if it fires early.
+// Runs before React: applies the saved theme and accent colour before first
+// paint (no flash) and keeps the browser's install prompt if it fires early.
 const bootScript = `
 try {
   var t = localStorage.getItem('my-space:theme');
   if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', t);
   document.documentElement.style.colorScheme = t;
+  var l = localStorage.getItem('my-space:lang');
+  document.documentElement.lang = l === 'vi' || l === 'en' ? l : (navigator.language || '').toLowerCase().indexOf('vi') === 0 ? 'vi' : 'en';
+} catch (e) {}
+try {
+  var accent = localStorage.getItem('my-space:accent-css');
+  if (accent) {
+    var tag = document.createElement('style');
+    tag.id = 'accent-style';
+    tag.textContent = accent;
+    document.head.appendChild(tag);
+  }
 } catch (e) {}
 window.addEventListener('beforeinstallprompt', function (e) {
   e.preventDefault();
@@ -40,7 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider>
-          {children}
+          <I18nProvider>{children}</I18nProvider>
         </ThemeProvider>
       </body>
     </html>

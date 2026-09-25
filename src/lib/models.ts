@@ -1,7 +1,8 @@
 import type { JSONContent } from '@tiptap/react'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
-export type LocalDocument = { id:string; title:string; content:JSONContent; createdAt:string; updatedAt:string; version:1 }
+/** `font`: page font id (see components/write/fonts.ts); absent = default. */
+export type LocalDocument = { id:string; title:string; content:JSONContent; font?:string; createdAt:string; updatedAt:string; version:1 }
 export type LocalBoard = { id:string; title:string; snapshot:unknown; preview?:string; createdAt:string; updatedAt:string; version:1 }
 export type Backup = { format:'my-space-backup'; version:1; exportedAt:string; documents:LocalDocument[]; boards:LocalBoard[] }
 export const EMPTY_CONTENT: JSONContent = { type:'doc', content:[{ type:'paragraph' }] }
