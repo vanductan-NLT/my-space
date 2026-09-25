@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import dynamic from 'next/dynamic'
-import { AppShell } from '@/components/app-shell'
 
 export const metadata:Metadata={title:'Write'}
 const WritingWorkspace=dynamic(()=>import('@/components/write/writing-workspace'),{loading:()=> <div className="center-state"><div className="spinner"/><p>Restoring documents…</p></div>})
-export default function WritePage(){return <AppShell><WritingWorkspace/></AppShell>}
+export default function WritePage(){return <WritingWorkspace/>}

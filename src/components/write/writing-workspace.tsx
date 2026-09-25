@@ -1,6 +1,6 @@
 'use client'
 
-import { BubbleMenu, EditorContent, useEditor } from '@tiptap/react'
+import { BubbleMenu, EditorContent, generateJSON, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
@@ -13,15 +13,21 @@ import TableRow from '@tiptap/extension-table-row'
 import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import {
-  AlignCenter, AlignLeft, AlignRight, Bold, Check, ChevronLeft, ChevronRight,
-  Code, Copy, Download, FilePlus2, Focus, Heading1, Heading2, Heading3,
+  AlignCenter, AlignLeft, AlignRight, Bold, Check, PanelLeftClose, PanelLeftOpen,
+  Code, Copy, Download, Focus, Heading1, Heading2, Heading3,
   Italic, Link2, List, ListOrdered, Minimize2, Plus, Printer,
   Quote, Redo2, Rows, Search, Strikethrough, Table2, Trash2,
   Underline as UnderlineIcon, Undo2, Unlink, Upload, X
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { db, exportBackup, importBackup, isQuotaError, parseBackup } from '@/lib/db'
+import { useAutosave } from '@/lib/use-autosave'
+import { markdownToHtml, toMarkdown } from '@/lib/markdown'
+import { Modal } from '../modal'
+import { SaveIndicator } from '../save-indicator'
+import { MenuButton } from '../menu-button'
 import { EMPTY_CONTENT, newDocument, type LocalDocument, type SaveState } from '@/lib/models'
+import { timeAgo } from '@/lib/time'
 import './write.css'
 
 const download = (name: string, text: string, type = 'application/json') => {
@@ -38,17 +44,25 @@ const plainText = (node: unknown): string => {
   return n.text ?? (n.content?.map(plainText).join(' ') ?? '')
 }
 
-const timeAgo = (iso: string) => {
-  const diffMinutes = Math.max(1, Math.round((Date.now() - Date.parse(iso)) / 60000))
-  if (diffMinutes < 60) {
-    return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (diffHours < 24) {
-    return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-diffHours, 'hour')
-  }
-  return new Date(iso).toLocaleDateString()
-}
+const extensions = [
+  StarterKit,
+  Underline,
+  Link.configure({ openOnClick: false }),
+  Placeholder.configure({ placeholder: 'Start writing…' }),
+  TextAlign.configure({ types: ['heading', 'paragraph'] }),
+  TaskList,
+  TaskItem.configure({ nested: true }),
+  Table.configure({ resizable: true }),
+  TableRow,
+  TableHeader,
+  TableCell,
+]
+
+// Shortcut hint prefix; only called in client-rendered UI.
+const mod = () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+')
+
+// Below this width the document list is an overlay, not a column.
+const isNarrow = () => window.matchMedia('(max-width: 700px)').matches
 
 export default function WritingWorkspace() {
   const [docs, setDocs] = useState<LocalDocument[]>([])
@@ -58,7 +72,7 @@ export default function WritingWorkspace() {
   const [sidebar, setSidebar] = useState(true)
   const [focus, setFocus] = useState(false)
   const [query, setQuery] = useState('')
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null)
+  const [notice, setNotice] = useState<{ text: string; error?: boolean; offerExport?: boolean } | null>(null)
 
   // Find & Replace state
   const [findOpen, setFindOpen] = useState(false)
@@ -73,9 +87,44 @@ export default function WritingWorkspace() {
   // Delete modal state
   const [docToDelete, setDocToDelete] = useState<LocalDocument | null>(null)
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Bumped when the active document is replaced from outside the editor (e.g. backup import).
+  const [contentVersion, setContentVersion] = useState(0)
+
   const fileRef = useRef<HTMLInputElement>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
+  const focusTitleNext = useRef(false)
+
+  // Confirmations fade on their own; errors stay until dismissed.
+  useEffect(() => {
+    if (!notice || notice.error) return
+    const t = setTimeout(() => setNotice(null), 4000)
+    return () => clearTimeout(t)
+  }, [notice])
   const active = docs.find(d => d.id === activeId)
+
+  const autosave = useAutosave<Partial<Pick<LocalDocument, 'title' | 'content'>>>({
+    delay: 650,
+    write: async (id, patch) => {
+      const title = patch.title === undefined ? {} : { title: patch.title.trim() || 'Untitled document' }
+      await db.documents.update(id, { ...patch, ...title, updatedAt: new Date().toISOString() })
+    },
+    onSaving: () => setSave('saving'),
+    onSaved: id => {
+      const updatedAt = new Date().toISOString()
+      setDocs(old => old.map(d => (d.id === id ? { ...d, updatedAt } : d)))
+      setSave('saved')
+    },
+    onError: err => {
+      setSave('error')
+      setNotice({
+        text: isQuotaError(err)
+          ? 'Browser storage is full. Export a backup now; your open work remains available.'
+          : 'Save failed. Export your work before closing this tab.',
+        error: true,
+        offerExport: true,
+      })
+    },
+  })
 
   const refresh = useCallback(async (id?: string) => {
     const all = await db.documents.orderBy('updatedAt').reverse().toArray()
@@ -87,6 +136,7 @@ export default function WritingWorkspace() {
   }, [])
 
   useEffect(() => {
+    if (isNarrow()) setSidebar(false)
     if (!('indexedDB' in window)) {
       setNotice({ text: 'IndexedDB is unavailable. Work cannot be saved in this browser.', error: true })
       setLoading(false)
@@ -97,7 +147,8 @@ export default function WritingWorkspace() {
       try {
         let all = await db.documents.toArray()
         if (!all.length) {
-          const first = newDocument('Welcome to My Space')
+          // Fixed id + put: seeding twice (StrictMode, two tabs) can't create duplicates.
+          const first = { ...newDocument('Welcome to My Space'), id: 'welcome' }
           first.content = {
             type: 'doc',
             content: [
@@ -112,7 +163,7 @@ export default function WritingWorkspace() {
               },
             ],
           }
-          await db.documents.add(first)
+          await db.documents.put(first)
           all = [first]
         }
         await refresh()
@@ -128,19 +179,7 @@ export default function WritingWorkspace() {
   const editor = useEditor(
     {
       immediatelyRender: false,
-      extensions: [
-        StarterKit,
-        Underline,
-        Link.configure({ openOnClick: false }),
-        Placeholder.configure({ placeholder: 'Start writing… Select text for quick tools.' }),
-        TextAlign.configure({ types: ['heading', 'paragraph'] }),
-        TaskList,
-        TaskItem.configure({ nested: true }),
-        Table.configure({ resizable: true }),
-        TableRow,
-        TableHeader,
-        TableCell,
-      ],
+      extensions,
       content: active?.content ?? EMPTY_CONTENT,
       editorProps: {
         attributes: { class: 'prose-editor', 'aria-label': 'Document content' },
@@ -150,39 +189,41 @@ export default function WritingWorkspace() {
         if (!activeId) return
         const content = e.getJSON()
         setDocs(old => old.map(d => (d.id === activeId ? { ...d, content } : d)))
-        setSave('saving')
-        if (saveTimer.current) clearTimeout(saveTimer.current)
-        saveTimer.current = setTimeout(async () => {
-          try {
-            const updatedAt = new Date().toISOString()
-            await db.documents.update(activeId, { content, updatedAt })
-            setDocs(old => old.map(d => (d.id === activeId ? { ...d, updatedAt } : d)))
-            setSave('saved')
-          } catch (err) {
-            setSave('error')
-            setNotice({
-              text: isQuotaError(err)
-                ? 'Browser storage is full. Export a backup now; your open work remains available.'
-                : 'Save failed. Export your work before closing this tab.',
-              error: true,
-            })
-          }
-        }, 650)
+        autosave.queue(activeId, { content })
       },
     },
-    [activeId]
+    // One editor per document: it is created with that document's content and
+    // its own undo history. Never push state back into a live editor on every
+    // keystroke — that resets the cursor and wipes undo.
+    [activeId, contentVersion]
   )
 
   useEffect(() => {
-    if (active && editor && !editor.isDestroyed) {
-      editor.commands.setContent(active.content, false)
-      localStorage.setItem('my-space:last-document', active.id)
-    }
-  }, [activeId, active, editor])
+    if (activeId) localStorage.setItem('my-space:last-document', activeId)
+  }, [activeId])
 
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
+  // Shrinking to phone width turns the list into an overlay; close it so it
+  // doesn't suddenly cover the editor.
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 700px)')
+    const onChange = () => query.matches && setSidebar(false)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
   }, [])
+
+  useEffect(() => {
+    if (!focusTitleNext.current || !editor) return
+    focusTitleNext.current = false
+    titleRef.current?.focus()
+    titleRef.current?.select()
+  }, [editor])
+
+  const selectDocument = (id: string) => {
+    if (isNarrow()) setSidebar(false)
+    if (id === activeId) return
+    void autosave.flush()
+    setActiveId(id)
+  }
 
   // Link Dialog open helper
   const openLinkDialog = useCallback(() => {
@@ -200,10 +241,6 @@ export default function WritingWorkspace() {
           setFocus(false)
         } else if (findOpen) {
           setFindOpen(false)
-        } else if (linkOpen) {
-          setLinkOpen(false)
-        } else if (docToDelete) {
-          setDocToDelete(null)
         }
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
@@ -215,34 +252,26 @@ export default function WritingWorkspace() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [focus, findOpen, linkOpen, docToDelete, openLinkDialog])
+  }, [focus, findOpen, openLinkDialog])
 
   const create = async () => {
+    await autosave.flush()
     const d = newDocument()
     await db.documents.add(d)
+    setQuery('')
+    if (isNarrow()) setSidebar(false)
+    focusTitleNext.current = true
     await refresh(d.id)
-    requestAnimationFrame(() => editor?.commands.focus())
   }
 
   const updateTitle = (title: string) => {
     if (!active) return
     setDocs(v => v.map(d => (d.id === active.id ? { ...d, title } : d)))
-    setSave('saving')
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      try {
-        await db.documents.update(active.id, {
-          title: title || 'Untitled document',
-          updatedAt: new Date().toISOString(),
-        })
-        setSave('saved')
-      } catch {
-        setSave('error')
-      }
-    }, 500)
+    autosave.queue(active.id, { title })
   }
 
   const duplicate = async (d: LocalDocument) => {
+    await autosave.flush()
     const copy = {
       ...d,
       id: crypto.randomUUID(),
@@ -270,32 +299,62 @@ export default function WritingWorkspace() {
     setNotice({ text: `Deleted "${target.title}"` })
   }
 
-  const backup = async () =>
-    download(`my-space-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(await exportBackup(), null, 2))
+  const backup = async () => {
+    // Documents come from memory, not IndexedDB: after a failed save the
+    // on-screen text is newer than what is stored.
+    const stored = await exportBackup().catch(() => null)
+    const data = { format: 'my-space-backup' as const, version: 1 as const, exportedAt: new Date().toISOString(), documents: docs, boards: stored?.boards ?? [] }
+    download(`my-space-${data.exportedAt.slice(0, 10)}.json`, JSON.stringify(data, null, 2))
+  }
 
   const importFile = async (file?: File) => {
     if (!file) return
     try {
       const raw = await file.text()
       if (file.name.endsWith('.json')) {
-        await importBackup(parseBackup(JSON.parse(raw)))
+        const data = parseBackup(JSON.parse(raw))
+        await autosave.flush()
+        const result = await importBackup(data)
         await refresh()
-        setNotice({ text: 'Backup imported successfully.' })
+        setContentVersion(v => v + 1)
+        const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+        const restored = result.added + result.updated
+        const parts = [
+          restored ? `Restored ${plural(restored, 'item')}.` : '',
+          result.keptAsCopy
+            ? `${plural(result.keptAsCopy, 'item')} had newer edits here, so the backup version was added as a “(from backup)” copy.`
+            : '',
+        ]
+        setNotice({ text: parts.filter(Boolean).join(' ') || 'The backup was empty.' })
       } else {
         const d = newDocument(file.name.replace(/\.[^.]+$/, ''))
-        d.content = {
-          type: 'doc',
-          content: raw.split(/\n{2,}/).map(p => ({
-            type: 'paragraph',
-            content: p ? [{ type: 'text', text: p }] : undefined,
-          })),
+        const ext = file.name.split('.').pop()?.toLowerCase()
+        if (ext === 'md' || ext === 'markdown') {
+          d.content = generateJSON(markdownToHtml(raw), extensions)
+        } else if (ext === 'html' || ext === 'htm') {
+          // Parsed against the editor schema: scripts, styles and unknown tags are dropped.
+          d.content = generateJSON(raw, extensions)
+        } else {
+          d.content = {
+            type: 'doc',
+            content: raw.split(/\n{2,}/).map(p => ({
+              type: 'paragraph',
+              content: p ? [{ type: 'text', text: p }] : undefined,
+            })),
+          }
         }
+        await autosave.flush()
         await db.documents.add(d)
         await refresh(d.id)
         setNotice({ text: 'Document imported.' })
       }
     } catch (err) {
-      setNotice({ text: err instanceof Error ? err.message : 'Import failed. Choose a valid file.', error: true })
+      setNotice({
+        text: err instanceof SyntaxError || !(err instanceof Error)
+          ? 'This file could not be read. Choose a My Space backup (.json) or a .md, .txt or .html file.'
+          : err.message,
+        error: true,
+      })
     } finally {
       if (fileRef.current) fileRef.current.value = ''
     }
@@ -368,10 +427,19 @@ export default function WritingWorkspace() {
     if (!editor) return
     const trimmed = linkUrl.trim()
     if (!trimmed) {
-      editor.chain().focus().unsetLink().run()
+      editor.chain().focus().extendMarkRange('link').unsetLink().run()
     } else {
-      const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-      editor.chain().focus().setLink({ href: url }).run()
+      const url = /^(https?:|mailto:)/i.test(trimmed) ? trimmed : `https://${trimmed}`
+      if (editor.state.selection.empty && !editor.isActive('link')) {
+        // Nothing selected: insert the address itself as a link instead of silently doing nothing.
+        editor
+          .chain()
+          .focus()
+          .insertContent([{ type: 'text', text: trimmed, marks: [{ type: 'link', attrs: { href: url } }] }, { type: 'text', text: ' ' }])
+          .run()
+      } else {
+        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+      }
     }
     setLinkOpen(false)
   }
@@ -383,7 +451,12 @@ export default function WritingWorkspace() {
     setLinkOpen(false)
   }
 
-  const filtered = docs.filter(d => d.title.toLowerCase().includes(query.toLowerCase()))
+  // First words of the body, so documents can be told apart without opening them.
+  const preview = (d: LocalDocument) => plainText(d.content).replace(/\s+/g, ' ').trim().slice(0, 90)
+  const needle = query.trim().toLowerCase()
+  const filtered = needle
+    ? docs.filter(d => d.title.toLowerCase().includes(needle) || plainText(d.content).toLowerCase().includes(needle))
+    : docs
   const words = plainText(active?.content).trim().split(/\s+/).filter(Boolean).length
   const chars = plainText(active?.content).length
 
@@ -397,7 +470,7 @@ export default function WritingWorkspace() {
       download(`${safe}.txt`, editor.getText(), 'text/plain')
     }
     if (format === 'md') {
-      download(`${safe}.md`, editor.getText({ blockSeparator: '\n\n' }), 'text/markdown')
+      download(`${safe}.md`, toMarkdown(editor.getJSON()), 'text/markdown')
     }
   }
 
@@ -429,12 +502,9 @@ export default function WritingWorkspace() {
       {/* Sidebar / Document Library */}
       <aside className="documents" aria-label="Documents">
         <div className="docs-head">
-          <div>
-            <span className="eyebrow">Writing mode</span>
-            <h1>Documents</h1>
-          </div>
-          <button className="icon-button" onClick={create} aria-label="New document" title="Create new document">
-            <FilePlus2 size={20} />
+          <h1>Documents</h1>
+          <button type="button" className="new-btn" onClick={create} aria-label="New document">
+            <Plus size={15} /> New
           </button>
         </div>
 
@@ -443,12 +513,13 @@ export default function WritingWorkspace() {
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search documents…"
+            placeholder="Search titles and text…"
             aria-label="Search documents"
           />
         </label>
 
         <div className="document-list">
+          {!filtered.length && needle && <p className="list-empty">Nothing matches “{query.trim()}”.</p>}
           {filtered.map(d => {
             const isActive = d.id === activeId
             return (
@@ -456,11 +527,14 @@ export default function WritingWorkspace() {
                 <button
                   type="button"
                   className="doc-select-btn"
-                  onClick={() => setActiveId(d.id)}
+                  onClick={() => selectDocument(d.id)}
                   aria-current={isActive ? 'true' : undefined}
                 >
                   <span className="doc-title">{d.title || 'Untitled document'}</span>
-                  <span className="doc-time">{timeAgo(d.updatedAt)}</span>
+                  <span className="doc-meta">
+                    {timeAgo(d.updatedAt)}
+                    {preview(d) && <> · {preview(d)}</>}
+                  </span>
                 </button>
                 <div className="doc-actions">
                   <button
@@ -504,12 +578,14 @@ export default function WritingWorkspace() {
             ref={fileRef}
             className="sr-only"
             type="file"
-            accept=".json,.md,.txt,.html"
+            accept=".json,.md,.markdown,.txt,.html,.htm"
             onChange={e => void importFile(e.target.files?.[0])}
           />
-          <p>Saved in this browser. Regular backups keep your thoughts safe.</p>
+          <p>Stored only in this browser. Back up now and then.</p>
         </div>
       </aside>
+
+      {sidebar && <button type="button" className="panel-scrim" aria-label="Close documents" onClick={() => setSidebar(false)} />}
 
       {/* Main Writer Area */}
       <section className="writer">
@@ -520,50 +596,31 @@ export default function WritingWorkspace() {
             aria-label={sidebar ? 'Hide documents sidebar' : 'Show documents sidebar'}
             title={sidebar ? 'Hide sidebar' : 'Show sidebar'}
           >
-            {sidebar ? <ChevronLeft size={19} /> : <ChevronRight size={19} />}
+            {sidebar ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}
           </button>
 
-          <div className="save-state" data-state={save}>
-            <span className="dot" />
-            {save === 'saving' ? 'Saving…' : save === 'error' ? 'Save failed' : 'Saved locally'}
-          </div>
+          <SaveIndicator state={save} />
 
           <div className="header-actions">
-            <label className="export-select" title="Export document">
-              <Download size={15} />
-              <select
-                aria-label="Export document format"
-                defaultValue=""
-                onChange={e => {
-                  exportActive(e.target.value)
-                  e.target.value = ''
-                }}
-              >
-                <option value="" disabled>
-                  Export…
-                </option>
-                <option value="md">Markdown (.md)</option>
-                <option value="txt">Plain text (.txt)</option>
-                <option value="html">HTML document (.html)</option>
-              </select>
-            </label>
+            <MenuButton
+              label="Export"
+              icon={<Download size={15} />}
+              items={[
+                { label: 'Markdown', hint: '.md', onSelect: () => exportActive('md') },
+                { label: 'Plain text', hint: '.txt', onSelect: () => exportActive('txt') },
+                { label: 'Web page', hint: '.html', onSelect: () => exportActive('html') },
+                'separator',
+                { label: 'Print or save as PDF', icon: <Printer size={15} />, onSelect: () => window.print() },
+              ]}
+            />
 
             <button
               className="icon-button"
               onClick={() => setFindOpen(v => !v)}
               aria-label="Find and replace"
-              title="Find and replace (⌘F)"
+              title={`Find and replace (${mod()}F)`}
             >
               <Search size={18} />
-            </button>
-
-            <button
-              className="icon-button"
-              onClick={() => window.print()}
-              aria-label="Print or save as PDF"
-              title="Print or save as PDF"
-            >
-              <Printer size={18} />
             </button>
 
             <button
@@ -617,9 +674,20 @@ export default function WritingWorkspace() {
           {active ? (
             <article className="page">
               <input
+                ref={titleRef}
                 className="title-input"
                 value={active.title}
                 onChange={e => updateTitle(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor) {
+                    e.preventDefault()
+                    // focus('start') sets the caret now but moves DOM focus in a later
+                    // animation frame; focus the view synchronously so the next
+                    // keystroke can't land in the title.
+                    editor.commands.focus('start')
+                    editor.view.focus()
+                  }
+                }}
                 aria-label="Document title"
                 placeholder="Untitled document"
               />
@@ -637,7 +705,7 @@ export default function WritingWorkspace() {
               <footer className="document-stats">
                 <span>{words} words</span>
                 <span>{chars} characters</span>
-                <span>~{Math.max(1, Math.ceil(words / 220))} min read</span>
+                {words > 0 && <span>~{Math.ceil(words / 220)} min read</span>}
               </footer>
             </article>
           ) : (
@@ -653,20 +721,14 @@ export default function WritingWorkspace() {
 
       {/* Link Dialog Modal */}
       {linkOpen && (
-        <div className="modal-overlay" onClick={() => setLinkOpen(false)}>
-          <div className="modal-dialog" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Insert Link</h3>
-              <button className="icon-button" onClick={() => setLinkOpen(false)} aria-label="Close">
-                <X size={18} />
-              </button>
-            </div>
+        <Modal title={editor?.isActive('link') ? 'Edit link' : 'Insert link'} onClose={() => setLinkOpen(false)}>
             <input
               className="input"
               value={linkUrl}
               onChange={e => setLinkUrl(e.target.value)}
               placeholder="https://example.com"
-              autoFocus
+              aria-label="Link address"
+              data-autofocus
               onKeyDown={e => {
                 if (e.key === 'Enter') applyLink()
               }}
@@ -681,36 +743,28 @@ export default function WritingWorkspace() {
                 Cancel
               </button>
               <button type="button" className="button primary" onClick={applyLink}>
-                Save Link
+                Save link
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Delete Document Confirmation Modal */}
       {docToDelete && (
-        <div className="modal-overlay" onClick={() => setDocToDelete(null)}>
-          <div className="modal-dialog" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Delete Document</h3>
-              <button className="icon-button" onClick={() => setDocToDelete(null)} aria-label="Close">
-                <X size={18} />
-              </button>
-            </div>
+        <Modal title="Delete document" onClose={() => setDocToDelete(null)}>
             <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
               Are you sure you want to delete <strong>“{docToDelete.title || 'Untitled document'}”</strong>? This action cannot be undone.
             </p>
             <div className="modal-footer">
-              <button type="button" className="button" onClick={() => setDocToDelete(null)}>
+              {/* Cancel takes focus: Enter must never delete by accident. */}
+              <button type="button" className="button" onClick={() => setDocToDelete(null)} data-autofocus>
                 Cancel
               </button>
               <button type="button" className="button danger" onClick={() => void confirmDelete()}>
                 Delete
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Notification Toast */}
@@ -720,7 +774,7 @@ export default function WritingWorkspace() {
           <button className="icon-button" onClick={() => setNotice(null)} aria-label="Dismiss notification">
             <X size={16} />
           </button>
-          {notice.error && (
+          {notice.offerExport && (
             <button className="button" onClick={() => void backup()}>
               Export backup now
             </button>
@@ -735,11 +789,13 @@ type Editor = ReturnType<typeof useEditor>
 
 function Tool({
   label,
+  shortcut,
   icon,
   click,
   active = false,
 }: {
   label: string
+  shortcut?: string
   icon: React.ReactNode
   click: () => void
   active?: boolean
@@ -747,7 +803,7 @@ function Tool({
   return (
     <button
       type="button"
-      title={label}
+      title={shortcut ? `${label} (${mod()}${shortcut})` : label}
       aria-label={label}
       aria-pressed={active}
       className={`tool ${active ? 'active' : ''}`}
@@ -765,8 +821,8 @@ function Toolbar({ editor, onOpenLink }: { editor: Editor; onOpenLink: () => voi
 
   return (
     <div className="editor-toolbar" role="toolbar" aria-label="Formatting tools">
-      <Tool label="Undo (⌘Z)" click={() => editor.chain().focus().undo().run()} icon={<Undo2 />} />
-      <Tool label="Redo (⌘⇧Z)" click={() => editor.chain().focus().redo().run()} icon={<Redo2 />} />
+      <Tool label="Undo" shortcut="Z" click={() => editor.chain().focus().undo().run()} icon={<Undo2 />} />
+      <Tool label="Redo" shortcut="Shift+Z" click={() => editor.chain().focus().redo().run()} icon={<Redo2 />} />
 
       <span className="separator" />
 
@@ -791,12 +847,12 @@ function Toolbar({ editor, onOpenLink }: { editor: Editor; onOpenLink: () => voi
 
       <span className="separator" />
 
-      <Tool label="Bold (⌘B)" active={editor.isActive('bold')} click={() => editor.chain().focus().toggleBold().run()} icon={<Bold />} />
-      <Tool label="Italic (⌘I)" active={editor.isActive('italic')} click={() => editor.chain().focus().toggleItalic().run()} icon={<Italic />} />
-      <Tool label="Underline (⌘U)" active={editor.isActive('underline')} click={() => editor.chain().focus().toggleUnderline().run()} icon={<UnderlineIcon />} />
+      <Tool label="Bold" shortcut="B" active={editor.isActive('bold')} click={() => editor.chain().focus().toggleBold().run()} icon={<Bold />} />
+      <Tool label="Italic" shortcut="I" active={editor.isActive('italic')} click={() => editor.chain().focus().toggleItalic().run()} icon={<Italic />} />
+      <Tool label="Underline" shortcut="U" active={editor.isActive('underline')} click={() => editor.chain().focus().toggleUnderline().run()} icon={<UnderlineIcon />} />
       <Tool label="Strikethrough" active={editor.isActive('strike')} click={() => editor.chain().focus().toggleStrike().run()} icon={<Strikethrough />} />
       <Tool label="Inline code" active={editor.isActive('code')} click={() => editor.chain().focus().toggleCode().run()} icon={<Code />} />
-      <Tool label="Link (⌘K)" active={editor.isActive('link')} click={onOpenLink} icon={<Link2 />} />
+      <Tool label="Link" shortcut="K" active={editor.isActive('link')} click={onOpenLink} icon={<Link2 />} />
 
       <span className="separator" />
 

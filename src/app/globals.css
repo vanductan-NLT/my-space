@@ -134,6 +134,13 @@ a {
   align-items: stretch;
 }
 
+@media (min-width: 701px) {
+  /* Make room for the expanded rail instead of covering the workspace. */
+  .app-shell.rail-expanded {
+    padding-left: 196px;
+  }
+}
+
 .brand {
   height: 48px;
   display: flex;
@@ -143,19 +150,154 @@ a {
   color: var(--mint);
   font-family: Outfit, sans-serif;
   font-weight: 700;
-  cursor: pointer;
   text-decoration: none;
 }
 
 .brand-mark {
   min-width: 32px;
   height: 32px;
-  border-radius: 10px;
-  background: var(--mint);
-  color: var(--mint-contrast);
   display: grid;
   place-items: center;
-  font-weight: 800;
+}
+
+/* Mascot: mint body in the current theme, eyes in the mint contrast colour. */
+.mascot {
+  display: block;
+  overflow: visible;
+}
+
+.mascot-body {
+  fill: var(--mint);
+}
+
+.mascot-eye {
+  fill: var(--mint-contrast);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.09s ease;
+}
+
+.mascot-line {
+  fill: none;
+  stroke: var(--mint-contrast);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.mascot-eyes {
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mascot-blink .mascot-eye {
+  transform: scaleY(0.12);
+}
+
+.mascot-curious .mascot-eye {
+  transform: scaleY(1.12);
+}
+
+/* The floating one: bottom-right by default, draggable with mouse or finger. */
+.floating-mascot {
+  position: fixed;
+  z-index: 900; /* above the workspace, below toasts (1000) and dialogs (1100) */
+  top: 0;
+  left: 0;
+  width: 52px;
+  height: 52px;
+  cursor: grab;
+  touch-action: none; /* a finger drag moves the mascot, not the page */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.25));
+}
+
+.floating-mascot.mascot-held {
+  cursor: grabbing;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.3));
+}
+
+.floating-mascot .mascot {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.25s ease;
+}
+
+.mascot-bounce {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mascot-bob 3.2s ease-in-out infinite;
+}
+
+.mascot-held .mascot-bounce {
+  animation: none;
+  transform: scale(1.08);
+}
+
+.mascot-happy .mascot-bounce {
+  animation: mascot-hop 0.55s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+.mascot-landing .mascot-bounce {
+  animation: mascot-land 0.45s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+.mascot-sleepy .mascot-bounce {
+  animation: mascot-breathe 4.2s ease-in-out infinite;
+}
+
+.mascot-z {
+  fill: var(--mint);
+  font: 700 7px sans-serif;
+  animation: mascot-z 2.4s ease-in-out infinite;
+}
+
+@keyframes mascot-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.6px); }
+}
+
+@keyframes mascot-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.03, 0.97); }
+}
+
+@keyframes mascot-hop {
+  0% { transform: none; }
+  25% { transform: scale(1.1, 0.88); }
+  55% { transform: translateY(-4px) scale(0.95, 1.06); }
+  100% { transform: none; }
+}
+
+@keyframes mascot-land {
+  0% { transform: scale(1.08); }
+  35% { transform: scale(1.14, 0.84); }
+  70% { transform: scale(0.97, 1.04); }
+  100% { transform: none; }
+}
+
+@keyframes mascot-z {
+  0% { opacity: 0; transform: translate(0, 2px); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: translate(3px, -4px); }
+}
+
+/* Out of the way while focusing on writing, and never printed. */
+.app-shell:has(.writing.focus) .floating-mascot {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .floating-mascot {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media print {
+  .floating-mascot {
+    display: none !important;
+  }
 }
 
 .brand-name, .nav-label {
@@ -228,6 +370,7 @@ a {
 
 .rail.expanded .rail-footer .footer-label {
   display: inline;
+  white-space: nowrap;
 }
 
 .rail:not(.expanded) .rail-footer .footer-label {
@@ -244,6 +387,39 @@ a {
   overflow: hidden;
   box-shadow: var(--shadow);
   transition: border-color 0.25s ease, background-color 0.25s ease;
+}
+
+.workspace .center-state {
+  height: 100%;
+}
+
+.work-host {
+  height: 100%;
+}
+
+.work-host[hidden] {
+  display: none;
+}
+
+/* Write's focus mode hides all app chrome, not only the editor chrome. */
+.app-shell:has(.writing.focus) {
+  padding: 0;
+}
+
+.app-shell:has(.writing.focus) .rail,
+.app-shell:has(.writing.focus) .mobile-nav {
+  display: none;
+}
+
+.app-shell:has(.writing.focus) .workspace {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* tldraw manages its own focus; the global ring would outline the whole canvas. */
+.tl-container:focus-visible {
+  outline: none;
 }
 
 .center-state {
@@ -358,28 +534,17 @@ a {
   font-size: 12px;
 }
 
-.save-state[data-state=saved] {
-  color: var(--success);
-}
 
-.save-state[data-state=saving] {
-  color: var(--mint);
-}
 
 .save-state[data-state=error] {
   color: var(--danger);
 }
 
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
 
 .toast {
   position: fixed;
-  z-index: 100;
+  /* Above tldraw's own UI layers (menus use ~400-650). */
+  z-index: 1000;
   right: 22px;
   bottom: 22px;
   max-width: 390px;
@@ -423,11 +588,111 @@ a {
   margin-bottom: 8px;
 }
 
+/* "+ New" in the document and board lists */
+.new-btn {
+  height: 32px;
+  padding: 0 12px 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--mint-border);
+  border-radius: 10px;
+  background: var(--mint-soft);
+  color: var(--mint);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.new-btn:hover {
+  filter: brightness(1.12);
+}
+
+/* Menu button (e.g. Export) */
+.menu-root {
+  position: relative;
+}
+
+.menu-trigger {
+  height: 38px;
+  min-height: 38px;
+  gap: 6px;
+  color: var(--secondary);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.menu-trigger:hover,
+.menu-trigger[aria-expanded='true'] {
+  color: var(--text);
+}
+
+.menu-trigger[aria-expanded='true'] .menu-chevron {
+  transform: rotate(180deg);
+}
+
+.menu-chevron {
+  transition: transform 0.15s ease;
+}
+
+.menu-popover {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 230px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.12s ease;
+}
+
+.menu-item {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--surface-hi);
+  outline: none;
+}
+
+.menu-item small {
+  margin-left: auto;
+  color: var(--muted);
+  font: 11px 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.menu-item svg {
+  color: var(--secondary);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
+}
+
 /* Modal and dialog system */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 1100;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(5px);
   display: grid;
@@ -483,9 +748,14 @@ a {
   display: none;
 }
 
+/* Tap-outside area behind the mobile document/board overlays. */
+.panel-scrim {
+  display: none;
+}
+
 @media (max-width: 700px) {
   .app-shell {
-    padding: 8px 8px 72px;
+    padding: 8px 8px calc(72px + env(safe-area-inset-bottom));
   }
   .rail {
     display: none;
@@ -499,7 +769,7 @@ a {
     z-index: 60;
     left: 8px;
     right: 8px;
-    bottom: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
     height: 60px;
     padding: 5px;
     background: var(--surface-trans);
@@ -509,8 +779,7 @@ a {
     box-shadow: var(--shadow);
     gap: 4px;
   }
-  .mobile-nav .nav-link,
-  .mobile-nav .mobile-theme-btn {
+  .mobile-nav .nav-link {
     flex: 1;
     flex-direction: column;
     gap: 3px;
@@ -518,8 +787,28 @@ a {
     min-height: 48px;
     padding: 0;
   }
-  .mobile-nav .nav-link svg,
-  .mobile-nav .mobile-theme-btn svg {
+  /* Above the mobile nav and clear of tldraw's bottom toolbar. */
+  .toast {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    bottom: auto;
+    max-width: none;
+  }
+  .panel-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 19;
+    border: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.4);
+    cursor: default;
+  }
+  .mobile-nav .nav-label {
+    font-size: 11px;
+  }
+  .mobile-nav .nav-link svg {
     width: 20px;
     height: 20px;
   }
@@ -550,4 +839,141 @@ a {
   .ProseMirror {
     max-width: none !important;
   }
+}
+
+/* Install-app instructions */
+.install-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 10px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Settings (theme, install, mascot) */
+.settings-group {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-group h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--secondary);
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-hi);
+}
+
+.segmented button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.settings-row {
+  min-height: 56px;
+  width: 100%;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-row:hover {
+  background: var(--surface-hi);
+}
+
+.settings-row > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-row strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-row small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings-row > svg {
+  color: var(--secondary);
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background-color 0.18s ease;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s ease;
+}
+
+[aria-checked='true'] > .switch {
+  background: var(--mint);
+}
+
+[aria-checked='true'] > .switch::after {
+  transform: translateX(18px);
+}
+
+/* Phones: dialogs marked as sheets rise from the bottom. */
+@media (max-width: 700px) {
+  .modal-overlay.sheet {
+    place-items: end stretch;
+    padding: 0;
+  }
+  .modal-overlay.sheet .modal-dialog {
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    animation: sheetUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }

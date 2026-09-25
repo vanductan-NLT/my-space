@@ -28,40 +28,48 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 16px 12px 20px;
+  padding: 18px 14px 12px 18px;
 }
 
 .board-heading h1 {
-  font: 600 22px Outfit, sans-serif;
-  margin: 4px 0;
+  font: 600 18px Outfit, sans-serif;
+  margin: 0;
   color: var(--text);
 }
 
 .board-list {
-  padding: 4px 8px;
+  flex: 1;
+  min-height: 0;
+  padding: 2px 8px 8px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .board-row {
   position: relative;
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid transparent;
+  border-radius: 10px;
   display: flex;
   align-items: center;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
-.board-row:hover {
+.board-row:hover,
+.board-row.active {
   background: var(--surface-hi);
 }
 
-.board-row.active {
-  background: var(--mint-soft);
-  border-color: var(--mint-border);
+.board-row.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--mint);
 }
 
 .board-select-btn {
@@ -70,23 +78,11 @@
   border: 0;
   background: transparent;
   text-align: left;
-  padding: 8px 6px 8px 10px;
+  padding: 10px 8px 10px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.board-preview {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  border-radius: 10px;
-  background: var(--surface-hi);
-  color: var(--mint);
-  border: 1px solid var(--border);
-  display: grid;
-  place-items: center;
 }
 
 .board-copy {
@@ -96,20 +92,17 @@
 }
 
 .board-copy strong {
-  font-size: 13px;
+  font-size: 13.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
 }
 
-.board-row.active .board-copy strong {
-  color: var(--mint);
-}
 
 .board-copy small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .board-actions {
@@ -152,20 +145,30 @@
 
 .board-footer {
   margin-top: auto;
-  padding: 12px;
+  padding: 8px 10px 12px;
   border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;
 }
 
 .board-footer .button {
+  min-height: 36px;
   font-size: 12px;
-  justify-content: flex-start;
-  padding: 0 12px;
+  font-weight: 500;
+  padding: 0 10px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--secondary);
+}
+
+.board-footer .button:hover {
+  background: var(--surface-hi);
+  color: var(--text);
 }
 
 .board-footer p {
-  margin: 4px 2px 2px;
+  margin: 2px 4px 0;
+  text-align: center;
   font-size: 11px;
   line-height: 1.5;
   color: var(--muted);
@@ -174,7 +177,10 @@
 .canvas-area {
   height: 100%;
   min-width: 0;
+  /* Keep tldraw's own z-indexed menus inside the canvas, below the board list overlay. */
+  isolation: isolate;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 52px 1fr;
 }
 
@@ -246,6 +252,9 @@
   .creative {
     display: block;
   }
+  .creative .panel-scrim {
+    z-index: 29;
+  }
   .board-panel {
     position: absolute;
     z-index: 30;
@@ -263,10 +272,19 @@
   .canvas-header {
     height: 52px;
   }
+  .canvas-header {
+    gap: 6px;
+    padding: 0 6px;
+  }
   .canvas-header .save-state {
     font-size: 11px;
+    white-space: nowrap;
   }
   .board-actions {
     opacity: 1;
+  }
+  .board-action-btn {
+    width: 40px;
+    height: 40px;
   }
 }

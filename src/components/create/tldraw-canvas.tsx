@@ -8,11 +8,13 @@ export default function TldrawCanvas({
   theme = 'dark',
   onChange,
   onEditor,
+  onLoadError,
 }: {
   snapshot: unknown
   theme?: 'dark' | 'light'
   onChange: (snapshot: unknown) => void
   onEditor: (editor: Editor) => void
+  onLoadError: () => void
 }) {
   const unlisten = useRef<(() => void) | null>(null)
   const currentEditor = useRef<Editor | null>(null)
@@ -36,7 +38,8 @@ export default function TldrawCanvas({
           try {
             loadSnapshot(editor.store, snapshot as Parameters<typeof loadSnapshot>[1])
           } catch {
-            /* Invalid records are ignored; the original remains exportable. */
+            // Leave the stored original untouched; the workspace stops autosaving this board.
+            onLoadError()
           }
         }
         unlisten.current = editor.store.listen(

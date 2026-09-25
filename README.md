@@ -38,7 +38,7 @@ npm run build
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_TANFLOW_URL` | No | TanFlow deployment; defaults to `https://tanflow.lovable.app/`. |
+| `NEXT_PUBLIC_TANFLOW_URL` | No | TanFlow deployment; defaults to `https://tanflow.vercel.app/`. |
 | `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` | **Production: verify** | Official tldraw SDK license key. Never commit the value. |
 
 ## Licensing and deployment gate
@@ -48,7 +48,7 @@ The app uses the official `tldraw` npm package, not copied source. tldraw's curr
 The build environment used for the initial implementation could not reach external hosts, so TanFlow's live `Content-Security-Policy` / `X-Frame-Options` headers could not be conclusively checked. Before production, run:
 
 ```bash
-curl -sSIL https://tanflow.lovable.app/ | grep -Ei 'content-security-policy|x-frame-options'
+curl -sSIL https://tanflow.vercel.app/ | grep -Ei 'content-security-policy|x-frame-options'
 ```
 
 If `frame-ancestors` or `X-Frame-Options` disallows this origin, change headers on the owned TanFlow deployment or use the included **Open TanFlow in new tab** fallback. Do not proxy or recreate TanFlow.
