@@ -6,13 +6,27 @@
 git clone https://github.com/vanductan-NLT/my-space.git
 ```
 
-A calm, private workspace with three focused modes: a rich local-first writer, an infinite tldraw canvas, and the existing TanFlow work experience. There are no accounts, application servers, analytics, or content APIs. Documents and boards stay in the browser.
+A calm, private workspace for writing, visual thinking, focused work, polished screenshots, and daily creative challenges. There are no accounts, application servers, analytics, or content APIs. Documents and boards stay in the browser.
+
+![My Space Write mode — a focused, local-first writing workspace](docs/screenshots/write.svg)
+
+## See My Space in action
+
+| Create — map ideas on an infinite canvas | Frame — turn captures into shareable visuals |
+| --- | --- |
+| ![Create mode with a visual launch map](docs/screenshots/create.svg) | ![Frame mode preparing a polished product screenshot](docs/screenshots/frame.svg) |
+| **Work — protect time for focused sessions** | **Challenge — build momentum one day at a time** |
+| ![Work mode with a focus timer and daily progress](docs/screenshots/work.svg) | ![Challenge mode tracking Winter Arc habits and streaks](docs/screenshots/challenge.svg) |
+
+> Product previews are illustrative and may differ slightly by theme, language, viewport, and browser.
 
 ## Routes
 
 - **`/write`** — Tiptap editor, local document library, autosave, search, backup/import, statistics, focus mode, and print-to-PDF.
 - **`/create`** — official tldraw SDK with local board management, debounced IndexedDB snapshots, JSON import/export, and tldraw's native image/SVG/PNG tools.
 - **`/work`** — responsive TanFlow iframe with loading, timeout/error, retry, and safe external-page fallback.
+- **`/frame`** — browser-only screenshot studio with backgrounds, padding, chrome, sizing, copy, and image export.
+- **`/challenge`** — lightweight daily creative prompts and progress tracking.
 - **`/`** — client redirect to the last opened mode (or Write on first use).
 
 ## Architecture and privacy
