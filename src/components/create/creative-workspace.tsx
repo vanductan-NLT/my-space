@@ -17,6 +17,7 @@ import { timeAgo } from '@/lib/time'
 import { useTheme } from '../theme-context'
 import { detectLang, getLang, rich, translate, useI18n } from '@/lib/i18n'
 import './create.css'
+import { FullModeButton } from '../full-mode'
 
 const Canvas = dynamic(() => import('./tldraw-canvas'), {
   ssr: false,
@@ -445,6 +446,7 @@ export default function CreativeWorkspace() {
           <SaveIndicator state={save} blocked={activeUnreadable} />
 
           <div className="canvas-header-actions">
+            <FullModeButton />
             {active && (
               <MenuButton
                 label={t('Capture')}

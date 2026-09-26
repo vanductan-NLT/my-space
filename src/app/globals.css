@@ -409,20 +409,57 @@ a {
   display: none;
 }
 
-/* Write's focus mode hides all app chrome, not only the editor chrome. */
-.app-shell:has(.writing.focus) {
+/* Shared full mode gives every workspace the entire viewport. */
+.app-shell.full-mode {
   padding: 0;
 }
 
-.app-shell:has(.writing.focus) .rail,
-.app-shell:has(.writing.focus) .mobile-nav {
+.app-shell.full-mode .rail,
+.app-shell.full-mode .mobile-nav,
+.app-shell.full-mode .floating-mascot {
   display: none;
 }
 
-.app-shell:has(.writing.focus) .workspace {
+.app-shell.full-mode .workspace {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+.exit-full-mode-btn {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 40px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  animation: fadeIn 0.2s ease;
+}
+
+.exit-full-mode-btn:hover {
+  background: var(--surface-hi);
+  border-color: var(--mint);
+}
+
+.kbd-hint {
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--muted);
 }
 
 /* tldraw manages its own focus; the global ring would outline the whole canvas. */
@@ -835,7 +872,7 @@ a {
 }
 
 @media print {
-  .rail, .mobile-nav, .documents, .editor-toolbar, .write-header, .exit-focus-btn {
+  .rail, .mobile-nav, .documents, .editor-toolbar, .write-header, .exit-full-mode-btn {
     display: none !important;
   }
   .app-shell {

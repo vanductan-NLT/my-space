@@ -4,6 +4,7 @@ import { ExternalLink, RefreshCw, TimerReset } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/lib/i18n'
 import './work.css'
+import { FullModeButton } from '../full-mode'
 
 const DEFAULT_URL = 'https://tanflow.vercel.app/'
 
@@ -34,6 +35,7 @@ export default function WorkWorkspace() {
         </div>
 
         <div className="work-header-actions">
+          <FullModeButton />
           <button
             className="icon-button"
             onClick={reload}

@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n'
 import { MenuButton } from '../menu-button'
 import { CaptureScreenButton } from '../screen-capture'
 import './frame.css'
+import { FullModeButton } from '../full-mode'
 
 /*
  * Frame mode: make a screenshot presentable — background, padding, rounded
@@ -166,6 +167,7 @@ export default function FrameStudio() {
       <header className="frame-header">
         <strong>{t('Frame')}</strong>
         <div className="frame-header-actions">
+          <FullModeButton />
           <CaptureScreenButton onImage={file => void load(file)} onError={text => setNotice({ text, error: true })} />
           <button type="button" className="icon-button" onClick={() => fileRef.current?.click()} title={t('Choose image')} aria-label={t('Choose image')}>
             <ImagePlus size={18} />

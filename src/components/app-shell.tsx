@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react'
 import { FloatingMascot, MascotLogo } from './mascot'
 import { SettingsSheet } from './settings-sheet'
 import { useI18n } from '@/lib/i18n'
+import { ExitFullModeButton, FullModeContext, type FullModeKind } from './full-mode'
+import { useScreenWakeLock } from '@/lib/use-screen-wake-lock'
 
 const WorkWorkspace = dynamic(() => import('./work/work-workspace'))
 
@@ -20,6 +22,7 @@ const modes = [
 ] as const
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  useScreenWakeLock()
   const pathname = usePathname()
   const { t } = useI18n()
   const router = useRouter()
@@ -32,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Shown unless turned off in Settings (read after mount: localStorage is client-only).
   const [mascotOn, setMascotOn] = useState(false)
+  const [fullMode, setFullMode] = useState<{ active: boolean; kind: FullModeKind }>({ active: false, kind: 'full' })
 
   useEffect(() => {
     try {
@@ -57,6 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('my-space:last-mode', pathname)
     if (pathname === '/work') setWorkOpened(true)
+    setFullMode(value => (value.active ? { ...value, active: false } : value))
   }, [pathname])
 
   useEffect(() => {
@@ -70,6 +75,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         e.preventDefault()
         const target = modes[Number(e.key) - 1]
         if (target) router.push(target.href)
+      } else if (e.key === 'Escape') {
+        setFullMode(value => (value.active ? { ...value, active: false } : value))
       }
     }
     window.addEventListener('keydown', handler)
@@ -100,8 +107,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     )
   })
 
+  const fullModeValue = {
+    active: fullMode.active,
+    kind: fullMode.kind,
+    enter: (kind: FullModeKind = 'full') => setFullMode({ active: true, kind }),
+    exit: () => setFullMode(value => ({ ...value, active: false })),
+  }
+
   return (
-    <div className={`app-shell ${expanded ? 'rail-expanded' : ''}`}>
+    <FullModeContext.Provider value={fullModeValue}>
+    <div className={`app-shell ${expanded ? 'rail-expanded' : ''} ${fullMode.active ? 'full-mode' : ''}`}>
+      <ExitFullModeButton />
       <aside className={`rail ${expanded ? 'expanded' : ''}`} aria-label={t('Workspace navigation')}>
         {/* Not a link: "/" is outside this layout, so it reloaded the shell (and TanFlow). */}
         <div className="brand">
@@ -152,5 +168,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </main>
     </div>
+    </FullModeContext.Provider>
   )
 }

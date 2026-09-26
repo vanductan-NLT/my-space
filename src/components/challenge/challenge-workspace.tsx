@@ -4,6 +4,7 @@ import { ExternalLink, RefreshCw, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/lib/i18n'
 import '../work/work.css'
+import { FullModeButton } from '../full-mode'
 
 const CHALLENGE_URL = 'https://www.vantoicalis.com/winter-arc'
 
@@ -30,6 +31,7 @@ export default function ChallengeWorkspace() {
           <strong>Winter Arc</strong>
         </div>
         <div className="work-header-actions">
+          <FullModeButton />
           <button className="icon-button" onClick={reload} title={t('Reload challenge')} aria-label={t('Reload challenge')}>
             <RefreshCw size={17} />
           </button>
