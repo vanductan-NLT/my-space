@@ -1,24 +1,6 @@
 'use client'
 
 import { BubbleMenu, EditorContent, generateJSON, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
-import TextAlign from '@tiptap/extension-text-align'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import Table from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableHeader from '@tiptap/extension-table-header'
-import TableCell from '@tiptap/extension-table-cell'
-import TextStyle from '@tiptap/extension-text-style'
-import Color from '@tiptap/extension-color'
-import Highlight from '@tiptap/extension-highlight'
-import Subscript from '@tiptap/extension-subscript'
-import Superscript from '@tiptap/extension-superscript'
-import { FontSize } from './font-size'
-import FontFamily from '@tiptap/extension-font-family'
 import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
@@ -32,7 +14,7 @@ import { useAutosave } from '@/lib/use-autosave'
 import { markdownToHtml, toMarkdown } from '@/lib/markdown'
 import { imageFileToDataUrl, isImageFile } from '@/lib/images'
 import type { EditorView } from '@tiptap/pm/view'
-import { ImageNode } from './image-node'
+import { writeExtensions } from './editor-extensions'
 import { SlashMenu } from './slash-menu'
 import { Dictation } from './dictation'
 import { CaptureScreenButton } from '../screen-capture'
@@ -60,37 +42,6 @@ const plainText = (node: unknown): string => {
   const n = node as { text?: string; content?: unknown[] }
   return n.text ?? (n.content?.map(plainText).join(' ') ?? '')
 }
-
-const extensions = [
-  StarterKit,
-  Underline,
-  Link.configure({ openOnClick: false }),
-  // Notion-style hints: on an empty page, and on whichever empty line you're on.
-  Placeholder.configure({
-    showOnlyCurrent: true,
-    placeholder: ({ editor, node }) =>
-      node.type.name === 'heading'
-        ? translate('Heading {n}', { n: node.attrs.level }, getLang())
-        : editor.isEmpty
-          ? translate("Start writing, or type '/' for blocks", undefined, getLang())
-          : translate("Type '/' for blocks", undefined, getLang()),
-  }),
-  TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
-  TaskList,
-  TaskItem.configure({ nested: true }),
-  Table.configure({ resizable: true }),
-  TableRow,
-  TableHeader,
-  TableCell,
-  ImageNode,
-  TextStyle,
-  Color,
-  Highlight.configure({ multicolor: true }),
-  FontSize,
-  FontFamily,
-  Subscript,
-  Superscript,
-]
 
 // Shortcut hint prefix; only called in client-rendered UI.
 const mod = () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+')
@@ -227,11 +178,14 @@ export default function WritingWorkspace() {
   const editor = useEditor(
     {
       immediatelyRender: false,
-      extensions,
+      extensions: writeExtensions,
       content: active?.content ?? EMPTY_CONTENT,
       editorProps: {
         attributes: { class: 'prose-editor', 'aria-label': translate('Document content', undefined, getLang()) },
-        transformPastedHTML: html => html.replace(/ style="[^"]*"/gi, ''),
+        // Keep supported inline styles from rich clipboard HTML. Tiptap still
+        // parses the paste through this schema, so unsupported tags and
+        // attributes are discarded without flattening colours, font choices,
+        // font sizes, highlighting or paragraph alignment.
         // Paste or drop images straight into the page.
         handlePaste: (view, event) => {
           const files = [...(event.clipboardData?.files ?? [])].filter(isImageFile)
@@ -389,10 +343,10 @@ export default function WritingWorkspace() {
         const d = newDocument(file.name.replace(/\.[^.]+$/, ''))
         const ext = file.name.split('.').pop()?.toLowerCase()
         if (ext === 'md' || ext === 'markdown') {
-          d.content = generateJSON(markdownToHtml(raw), extensions)
+          d.content = generateJSON(markdownToHtml(raw), writeExtensions)
         } else if (ext === 'html' || ext === 'htm') {
-          // Parsed against the editor schema: scripts, styles and unknown tags are dropped.
-          d.content = generateJSON(raw, extensions)
+          // Parsed against the editor schema: scripts, style elements and unknown tags are dropped.
+          d.content = generateJSON(raw, writeExtensions)
         } else {
           d.content = {
             type: 'doc',
