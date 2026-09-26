@@ -504,43 +504,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Floating exit button for focus mode */
-.exit-focus-btn {
-  position: fixed;
-  top: 18px;
-  right: 22px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 40px;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  animation: fadeIn 0.2s ease;
-}
-
-.exit-focus-btn:hover {
-  background: var(--surface-hi);
-  border-color: var(--mint);
-}
-
-.kbd-hint {
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 1px 6px;
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--muted);
-}
-
 .writing.focus {
   /* The sidebar is display:none here, so the writer must own the only column. */
   grid-template-columns: 1fr;

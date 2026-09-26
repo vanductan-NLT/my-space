@@ -23,7 +23,7 @@ import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import {
-  Bold, Code, Columns2, Copy, Download, Focus, Italic, Link2, Minimize2, PanelLeftClose,
+  Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
   PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -45,6 +45,7 @@ import { EMPTY_CONTENT, newDocument, type LocalDocument, type SaveState } from '
 import { timeAgo } from '@/lib/time'
 import { detectLang, getLang, rich, translate, useI18n } from '@/lib/i18n'
 import './write.css'
+import { FullModeButton, useFullMode } from '../full-mode'
 
 const download = (name: string, text: string, type = 'application/json') => {
   const a = document.createElement('a')
@@ -106,7 +107,7 @@ export default function WritingWorkspace() {
   const [loading, setLoading] = useState(true)
   const [save, setSave] = useState<SaveState>('idle')
   const [sidebar, setSidebar] = useState(true)
-  const [focus, setFocus] = useState(false)
+  const { active: focus } = useFullMode()
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState<{ text: string; error?: boolean; offerExport?: boolean } | null>(null)
 
@@ -296,19 +297,17 @@ export default function WritingWorkspace() {
     setLinkOpen(true)
   }, [editor])
 
-  // Keyboard shortcuts (Escape leaves focus mode, Cmd/Ctrl+K inserts a link).
+  // Keyboard shortcut for inserting a link. Escape is handled by the shared full mode.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (focus) setFocus(false)
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         openLinkDialog()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [focus, openLinkDialog])
+  }, [openLinkDialog])
 
   const create = async () => {
     await autosave.flush()
@@ -482,20 +481,6 @@ export default function WritingWorkspace() {
 
   return (
     <div className={`writing ${sidebar ? '' : 'sidebar-hidden'} ${focus ? 'focus' : ''}`}>
-      {/* Floating Exit Focus Mode Button */}
-      {focus && (
-        <button
-          className="exit-focus-btn"
-          onClick={() => setFocus(false)}
-          title={t('Exit focus mode (Esc)')}
-          aria-label={t('Exit focus mode')}
-        >
-          <Minimize2 size={16} />
-          <span>{t('Exit Focus')}</span>
-          <kbd className="kbd-hint">Esc</kbd>
-        </button>
-      )}
-
       {/* Sidebar / Document Library */}
       <aside className="documents" aria-label={t('Documents')}>
         <div className="docs-head">
@@ -628,14 +613,7 @@ export default function WritingWorkspace() {
 
             <Dictation editor={editor} onError={text => setNotice({ text, error: true })} />
 
-            <button
-              className="icon-button"
-              onClick={() => setFocus(true)}
-              aria-label={t('Focus mode')}
-              title={t('Focus mode (full screen writing)')}
-            >
-              <Focus size={18} />
-            </button>
+            <FullModeButton kind="focus" />
           </div>
         </header>
 
