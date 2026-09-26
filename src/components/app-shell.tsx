@@ -9,6 +9,7 @@ import { FloatingMascot, MascotLogo } from './mascot'
 import { SettingsSheet } from './settings-sheet'
 import { useI18n } from '@/lib/i18n'
 import { ExitFullModeButton, FullModeContext, type FullModeKind } from './full-mode'
+import { useScreenWakeLock } from '@/lib/use-screen-wake-lock'
 
 const WorkWorkspace = dynamic(() => import('./work/work-workspace'))
 
@@ -21,6 +22,7 @@ const modes = [
 ] as const
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  useScreenWakeLock()
   const pathname = usePathname()
   const { t } = useI18n()
   const router = useRouter()
