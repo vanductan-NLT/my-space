@@ -31,7 +31,6 @@ export default function ChallengeWorkspace() {
           <strong>Winter Arc</strong>
         </div>
         <div className="work-header-actions">
-          <FullModeButton />
           <button className="icon-button" onClick={reload} title={t('Reload challenge')} aria-label={t('Reload challenge')}>
             <RefreshCw size={17} />
           </button>
@@ -39,6 +38,7 @@ export default function ChallengeWorkspace() {
             <ExternalLink size={15} />
             <span>{t('Open in new tab')}</span>
           </a>
+          <FullModeButton />
         </div>
       </header>
 

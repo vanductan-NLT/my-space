@@ -426,30 +426,71 @@ a {
   box-shadow: none;
 }
 
+/* Full mode is a presentation view: keep only each mode's primary canvas. */
+.app-shell.full-mode .work-mode {
+  grid-template-rows: 1fr;
+}
+
+.app-shell.full-mode .work-header,
+.app-shell.full-mode .board-panel,
+.app-shell.full-mode .canvas-header,
+.app-shell.full-mode .frame-header,
+.app-shell.full-mode .frame-panel,
+.app-shell.full-mode .panel-scrim {
+  display: none !important;
+}
+
+.app-shell.full-mode .creative,
+.app-shell.full-mode .frame-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell.full-mode .canvas-area {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.full-mode-trigger {
+  margin-left: 4px;
+  background: var(--mint-soft);
+  border-color: var(--mint-border);
+  color: var(--mint);
+}
+
+.full-mode-trigger:hover {
+  background: var(--surface-hi);
+  border-color: var(--mint);
+}
+
 .exit-full-mode-btn {
   position: fixed;
-  top: 18px;
-  right: 22px;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1000;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
-  height: 40px;
-  background: var(--surface);
+  padding: 0 12px;
+  height: 36px;
+  background: var(--surface-trans);
   color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px);
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  opacity: 0.78;
+  transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
   animation: fadeIn 0.2s ease;
 }
 
-.exit-full-mode-btn:hover {
+.exit-full-mode-btn:hover,
+.exit-full-mode-btn:focus-visible {
   background: var(--surface-hi);
   border-color: var(--mint);
+  opacity: 1;
 }
 
 .kbd-hint {
