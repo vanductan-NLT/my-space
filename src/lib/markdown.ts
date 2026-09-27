@@ -83,6 +83,35 @@ const inlineHtml = (text: string) =>
     .replace(/(^|\W)_([^_]+)_(?=\W|$)/g, '$1<em>$2</em>')
     .replace(/~~([^~]+)~~/g, '<s>$1</s>')
 
+const tableCells = (line: string) =>
+  line
+    .trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map(cell => cell.trim())
+
+const isTableDivider = (line: string) => {
+  const cells = tableCells(line)
+  return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell))
+}
+
+/**
+ * Clipboard text from chat and document tools often escapes every Markdown
+ * marker (for example `\# Title` and `\| A \| B \|`). Undo only Markdown
+ * punctuation, then repair blank lines inserted between copied table rows.
+ */
+export function normalizePastedMarkdown(text: string): string {
+  return text
+    .replace(/\\([\\`*_{}\[\]()#+\-.!|>:~])/g, '$1')
+    .replace(/(\|[^\n]+\|)\n[ \t]*\n(?=[ \t]*\|)/g, '$1\n')
+}
+
+/** Avoid treating ordinary multi-line prose as Markdown on paste. */
+export function looksLikeMarkdown(text: string): boolean {
+  const value = normalizePastedMarkdown(text)
+  return /(^|\n)\s*(?:#{1,6}\s|>|[-*+]\s|\d+[.)]\s|```|\|.+\|\s*\n\s*\|?\s*:?-{3,})/m.test(value)
+}
+
 /** Converts Markdown to HTML the editor can parse. Output is escaped; only http(s)/mailto links survive. */
 export function markdownToHtml(markdown: string): string {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
@@ -119,6 +148,16 @@ export function markdownToHtml(markdown: string): string {
     if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
       out.push('<hr>')
       i++
+      continue
+    }
+    if (line.trim().startsWith('|') && i + 1 < lines.length && isTableDivider(lines[i + 1])) {
+      const header = tableCells(line)
+      i += 2
+      const rows: string[][] = []
+      while (i < lines.length && lines[i].trim().startsWith('|')) rows.push(tableCells(lines[i++]))
+      const cells = (values: string[], tag: 'th' | 'td') =>
+        values.map(value => `<${tag}><p>${inlineHtml(value)}</p></${tag}>`).join('')
+      out.push(`<table><thead><tr>${cells(header, 'th')}</tr></thead><tbody>${rows.map(row => `<tr>${cells(row, 'td')}</tr>`).join('')}</tbody></table>`)
       continue
     }
     if (line.startsWith('>')) {

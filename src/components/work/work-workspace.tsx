@@ -35,7 +35,6 @@ export default function WorkWorkspace() {
         </div>
 
         <div className="work-header-actions">
-          <FullModeButton />
           <button
             className="icon-button"
             onClick={reload}
@@ -55,6 +54,7 @@ export default function WorkWorkspace() {
             <ExternalLink size={15} />
             <span>{t('Open in new tab')}</span>
           </a>
+          <FullModeButton />
         </div>
       </header>
 

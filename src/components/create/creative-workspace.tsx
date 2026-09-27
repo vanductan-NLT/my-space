@@ -446,7 +446,6 @@ export default function CreativeWorkspace() {
           <SaveIndicator state={save} blocked={activeUnreadable} />
 
           <div className="canvas-header-actions">
-            <FullModeButton />
             {active && (
               <MenuButton
                 label={t('Capture')}
@@ -485,6 +484,7 @@ export default function CreativeWorkspace() {
                 <Download size={17} />
               </button>
             )}
+            <FullModeButton />
           </div>
         </header>
 

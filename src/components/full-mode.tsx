@@ -31,8 +31,8 @@ export function FullModeButton({ kind = 'full' }: { kind?: FullModeKind }) {
   return (
     <button
       type="button"
-      className="icon-button"
-      onClick={() => (active ? exit() : enter(kind))}
+      className="icon-button full-mode-trigger"
+      onClick={() => enter(kind)}
       aria-label={label}
       title={`${focus ? t('Focus mode (full screen writing)') : t('Full mode (Esc to exit)')} (Ctrl/⌘+⇧+F)`}
     >
@@ -41,7 +41,7 @@ export function FullModeButton({ kind = 'full' }: { kind?: FullModeKind }) {
   )
 }
 
-/** One consistent escape hatch, rendered above every workspace in full mode. */
+/** A quiet, consistently placed escape hatch above every full-screen canvas. */
 export function ExitFullModeButton() {
   const { t } = useI18n()
   const { active, kind, exit } = useFullMode()

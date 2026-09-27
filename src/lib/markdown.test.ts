@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markdownToHtml, toMarkdown } from './markdown'
+import { looksLikeMarkdown, markdownToHtml, normalizePastedMarkdown, toMarkdown } from './markdown'
 
 const text = (t: string, marks?: { type: string; attrs?: Record<string, unknown> }[]) => ({ type: 'text', text: t, marks })
 
@@ -41,5 +41,27 @@ describe('markdownToHtml', () => {
 
   it('escapes HTML and drops unsafe links', () => {
     expect(markdownToHtml('<script>x</script> [a](javascript:alert)')).toBe('<p>&lt;script&gt;x&lt;/script&gt; a</p>')
+  })
+
+  it('converts GFM tables', () => {
+    expect(markdownToHtml('| Name | State |\n| --- | :---: |\n| Fit | Ready |')).toBe(
+      '<table><thead><tr><th><p>Name</p></th><th><p>State</p></th></tr></thead><tbody><tr><td><p>Fit</p></td><td><p>Ready</p></td></tr></tbody></table>'
+    )
+  })
+})
+
+describe('pasted Markdown', () => {
+  it('repairs escaped markers and copied table spacing', () => {
+    const pasted = '\\# Strategy\n\n\\| # \\| Decision \\|\n\n\\|---\\|---\\|\n\n\\| A1 \\| Keep Doc \\|\n\n\\- First step\n\n1\\. Next step'
+    const normalized = normalizePastedMarkdown(pasted)
+
+    expect(normalized).toBe('# Strategy\n\n| # | Decision |\n|---|---|\n| A1 | Keep Doc |\n\n- First step\n\n1. Next step')
+    expect(looksLikeMarkdown(pasted)).toBe(true)
+    expect(markdownToHtml(normalized)).toContain('<h1>Strategy</h1>')
+    expect(markdownToHtml(normalized)).toContain('<table>')
+  })
+
+  it('leaves ordinary prose on the normal plain-text paste path', () => {
+    expect(looksLikeMarkdown('A normal paragraph\nwith another line.')).toBe(false)
   })
 })
