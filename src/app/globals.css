@@ -782,6 +782,40 @@ a {
   margin-top: 4px;
 }
 
+.shortcut-list {
+  display: grid;
+  gap: 2px;
+}
+
+.shortcut-row {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--secondary);
+  font-size: 14px;
+}
+
+.shortcut-row:last-child {
+  border-bottom: 0;
+}
+
+.shortcut-row kbd {
+  flex: none;
+  min-width: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  background: var(--surface-hi);
+  color: var(--text);
+  font: 12px 'JetBrains Mono', ui-monospace, monospace;
+  text-align: center;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

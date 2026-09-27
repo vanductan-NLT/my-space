@@ -10,6 +10,8 @@ import { SettingsSheet } from './settings-sheet'
 import { useI18n } from '@/lib/i18n'
 import { ExitFullModeButton, FullModeContext, type FullModeKind } from './full-mode'
 import { useScreenWakeLock } from '@/lib/use-screen-wake-lock'
+import { isTypingTarget } from '@/lib/keyboard-shortcuts'
+import { Modal } from './modal'
 
 const WorkWorkspace = dynamic(() => import('./work/work-workspace'))
 
@@ -33,6 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // other modes are shown so a running timer is not reset.
   const [workOpened, setWorkOpened] = useState(onWork)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // Shown unless turned off in Settings (read after mount: localStorage is client-only).
   const [mascotOn, setMascotOn] = useState(false)
   const [fullMode, setFullMode] = useState<{ active: boolean; kind: FullModeKind }>({ active: false, kind: 'full' })
@@ -71,17 +74,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && ['1', '2', '3', '4', '5'].includes(e.key)) {
+      const command = e.metaKey || e.ctrlKey
+      if (command && !e.altKey && !e.shiftKey && ['1', '2', '3', '4', '5'].includes(e.key)) {
         e.preventDefault()
         const target = modes[Number(e.key) - 1]
         if (target) router.push(target.href)
+      } else if (command && !e.altKey && !e.shiftKey && e.key === ',') {
+        e.preventDefault()
+        setShortcutsOpen(false)
+        setSettingsOpen(true)
+      } else if (command && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setFullMode(value => ({ active: !value.active, kind: pathname === '/write' ? 'focus' : 'full' }))
+      } else if (!command && !e.altKey && !e.shiftKey && e.key === '?' && !isTypingTarget(e.target)) {
+        e.preventDefault()
+        setSettingsOpen(false)
+        setShortcutsOpen(true)
       } else if (e.key === 'Escape') {
         setFullMode(value => (value.active ? { ...value, active: false } : value))
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [router])
+  }, [pathname, router])
 
   const toggleRail = () => {
     setExpanded(v => {
@@ -130,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="rail-nav">{navLinks}</nav>
 
         <div className="rail-footer">
-          <button className="icon-button" onClick={() => setSettingsOpen(true)} title={t('Settings')} aria-label={t('Settings')} aria-haspopup="dialog">
+          <button className="icon-button" onClick={() => setSettingsOpen(true)} title={`${t('Settings')} (${modKey},)`} aria-label={t('Settings')} aria-haspopup="dialog">
             <Settings size={19} />
             <span className="footer-label">{t('Settings')}</span>
           </button>
@@ -156,7 +171,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="nav-label">{t('Settings')}</span>
         </button>
       </nav>
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} mascotOn={mascotOn} onMascotChange={changeMascot} />
+      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} mascotOn={mascotOn} onMascotChange={changeMascot} onOpenShortcuts={() => setShortcutsOpen(true)} />
+      {shortcutsOpen && (
+        <Modal title={t('Keyboard shortcuts')} onClose={() => setShortcutsOpen(false)}>
+          <div className="shortcut-list">
+            {modes.map(({ label, shortcut }) => (
+              <div className="shortcut-row" key={label}><span>{t(label)}</span><kbd>{modKey}{shortcut}</kbd></div>
+            ))}
+            <div className="shortcut-row"><span>{t('Settings')}</span><kbd>{modKey},</kbd></div>
+            <div className="shortcut-row"><span>{t('Toggle full mode')}</span><kbd>{modKey}⇧F</kbd></div>
+            <div className="shortcut-row"><span>{t('Show keyboard shortcuts')}</span><kbd>?</kbd></div>
+            <div className="shortcut-row"><span>{t('Exit full mode or close dialog')}</span><kbd>Esc</kbd></div>
+          </div>
+        </Modal>
+      )}
       {mascotOn && <FloatingMascot />}
 
       <main className="workspace">

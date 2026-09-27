@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, ExternalLink, MonitorDown, Pipette } from 'lucide-react'
+import { Check, ExternalLink, Keyboard, MonitorDown, Pipette } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { ACCENTS, applyAccent, isHex, readAccent, resolveAccent } from '@/lib/accent'
 import { useI18n, type Lang } from '@/lib/i18n'
@@ -32,11 +32,13 @@ export function SettingsSheet({
   onClose,
   mascotOn,
   onMascotChange,
+  onOpenShortcuts,
 }: {
   open: boolean
   onClose: () => void
   mascotOn: boolean
   onMascotChange: (on: boolean) => void
+  onOpenShortcuts: () => void
 }) {
   const { choice, setChoice, theme } = useTheme()
   const { lang, setLang, t } = useI18n()
@@ -123,6 +125,21 @@ export function SettingsSheet({
           </section>
 
           <section className="settings-group">
+            <button
+              type="button"
+              className="settings-row"
+              onClick={() => {
+                onClose()
+                onOpenShortcuts()
+              }}
+            >
+              <span>
+                <strong>{t('Keyboard shortcuts')}</strong>
+                <small>{t('Work faster without leaving the keyboard')}</small>
+              </span>
+              <Keyboard size={18} aria-hidden="true" />
+            </button>
+
             <button type="button" className="settings-row" role="switch" aria-checked={mascotOn} onClick={() => onMascotChange(!mascotOn)}>
               <span>
                 <strong>{t('Mascot')}</strong>

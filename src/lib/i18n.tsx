@@ -32,6 +32,11 @@ const VI: Record<string, string> = {
   'Opening your space…': 'Đang mở không gian của bạn…',
   'Save failed': 'Lưu thất bại',
   'Not saving': 'Không lưu',
+  'Keyboard shortcuts': 'Phím tắt bàn phím',
+  'Work faster without leaving the keyboard': 'Thao tác nhanh hơn mà không cần rời bàn phím',
+  'Toggle full mode': 'Bật/tắt chế độ toàn màn hình',
+  'Show keyboard shortcuts': 'Hiện danh sách phím tắt',
+  'Exit full mode or close dialog': 'Thoát toàn màn hình hoặc đóng hộp thoại',
 
   // Settings
   'Language': 'Ngôn ngữ',

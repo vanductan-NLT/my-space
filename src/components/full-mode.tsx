@@ -24,7 +24,7 @@ export function useFullMode() {
 /** Shared full-mode trigger used by every workspace header. */
 export function FullModeButton({ kind = 'full' }: { kind?: FullModeKind }) {
   const { t } = useI18n()
-  const { enter } = useFullMode()
+  const { active, enter, exit } = useFullMode()
   const focus = kind === 'focus'
   const label = focus ? t('Focus mode') : t('Full mode')
 
@@ -32,9 +32,9 @@ export function FullModeButton({ kind = 'full' }: { kind?: FullModeKind }) {
     <button
       type="button"
       className="icon-button"
-      onClick={() => enter(kind)}
+      onClick={() => (active ? exit() : enter(kind))}
       aria-label={label}
-      title={focus ? t('Focus mode (full screen writing)') : t('Full mode (Esc to exit)')}
+      title={`${focus ? t('Focus mode (full screen writing)') : t('Full mode (Esc to exit)')} (Ctrl/⌘+⇧+F)`}
     >
       {focus ? <Focus size={18} /> : <Maximize2 size={18} />}
     </button>
