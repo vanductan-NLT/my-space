@@ -11,9 +11,10 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { db, exportBackup, importBackup, isQuotaError, parseBackup } from '@/lib/db'
 import { useAutosave } from '@/lib/use-autosave'
-import { markdownToHtml, toMarkdown } from '@/lib/markdown'
+import { looksLikeMarkdown, markdownToHtml, normalizePastedMarkdown, toMarkdown } from '@/lib/markdown'
 import { imageFileToDataUrl, isImageFile } from '@/lib/images'
 import type { EditorView } from '@tiptap/pm/view'
+import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model'
 import { writeExtensions } from './editor-extensions'
 import { SlashMenu } from './slash-menu'
 import { Dictation } from './dictation'
@@ -189,10 +190,28 @@ export default function WritingWorkspace() {
         // Paste or drop images straight into the page.
         handlePaste: (view, event) => {
           const files = [...(event.clipboardData?.files ?? [])].filter(isImageFile)
-          if (!files.length) return false
-          event.preventDefault()
-          void insertImages(view, files)
-          return true
+          if (files.length) {
+            event.preventDefault()
+            void insertImages(view, files)
+            return true
+          }
+
+          // Some tools put Markdown—not rich HTML—on the clipboard. Recognise
+          // block Markdown (including escaped Markdown copied from chat), turn
+          // it into schema-safe HTML, and insert actual headings/lists/tables.
+          const clipboard = event.clipboardData
+          const text = clipboard?.getData('text/plain') ?? ''
+          if (looksLikeMarkdown(text)) {
+            event.preventDefault()
+            const html = markdownToHtml(normalizePastedMarkdown(text))
+            const container = document.createElement('div')
+            container.innerHTML = html
+            const slice = ProseMirrorDOMParser.fromSchema(view.state.schema).parseSlice(container)
+            view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+            return true
+          }
+
+          return false
         },
         handleDrop: (view, event, _slice, moved) => {
           const files = [...(event.dataTransfer?.files ?? [])].filter(isImageFile)
