@@ -1,6 +1,6 @@
 'use client'
 
-import { Aperture, Brush, ChevronLeft, ChevronRight, FileText, PanelsTopLeft, Settings, Trophy } from 'lucide-react'
+import { Aperture, Brush, ChevronLeft, ChevronRight, FileText, PanelsTopLeft, Settings } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -20,7 +20,6 @@ const modes = [
   { href: '/create', label: 'Create', icon: Brush, shortcut: '2' },
   { href: '/work', label: 'Work', icon: PanelsTopLeft, shortcut: '3' },
   { href: '/frame', label: 'Frame', icon: Aperture, shortcut: '4' },
-  { href: '/challenge', label: 'Challenge', icon: Trophy, shortcut: '5' },
 ] as const
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -75,7 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const command = e.metaKey || e.ctrlKey
-      if (command && !e.altKey && !e.shiftKey && ['1', '2', '3', '4', '5'].includes(e.key)) {
+      if (command && !e.altKey && !e.shiftKey && ['1', '2', '3', '4'].includes(e.key)) {
         e.preventDefault()
         const target = modes[Number(e.key) - 1]
         if (target) router.push(target.href)

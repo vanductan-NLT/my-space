@@ -18,7 +18,6 @@ const VI: Record<string, string> = {
   'Create': 'Vẽ',
   'Work': 'Làm việc',
   'Frame': 'Khung ảnh',
-  'Challenge': 'Thử thách',
   'Settings': 'Cài đặt',
   'Collapse': 'Thu gọn',
   'Collapse navigation': 'Thu gọn thanh bên',
@@ -354,11 +353,6 @@ const VI: Record<string, string> = {
     'Trang có thể chặn nhúng, đang offline hoặc tải quá lâu. Cách chắc nhất là mở TanFlow trực tiếp.',
   'Open TanFlow': 'Mở TanFlow',
   'Try again': 'Thử lại',
-  'Reload challenge': 'Tải lại thử thách',
-  'Open challenge in external tab': 'Mở thử thách ở tab mới',
-  'Opening Winter Arc': 'Đang mở Winter Arc',
-  'Winter Arc could not be embedded': 'Không nhúng được Winter Arc',
-  'Open Winter Arc': 'Mở Winter Arc',
 }
 
 let current: Lang = 'en'
