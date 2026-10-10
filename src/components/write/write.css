@@ -1180,3 +1180,50 @@
   color: var(--fg-muted);
   vertical-align: middle;
 }
+
+
+.folder-rename-input {
+  flex: 1;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.folder-rename-input:focus {
+  border-color: var(--accent);
+}
+.uncategorized-zone {
+  min-height: 40px;
+  padding-bottom: 20px;
+}
+.uncategorized-empty-drop {
+  height: 60px;
+  border: 2px dashed rgba(0,0,0,0.1);
+  border-radius: 8px;
+  margin: 8px;
+}
+.move-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.move-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+}
+.move-item:hover {
+  background: var(--btn-hover);
+}

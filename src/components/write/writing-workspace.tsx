@@ -5,7 +5,7 @@ import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import {
-  Folder, FolderOpen, Pin, PinOff, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
+  Folder, FolderOpen, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
   PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -57,6 +57,9 @@ export default function WritingWorkspace() {
   const [docs, setDocs] = useState<LocalDocument[]>([])
   const [folders, setFolders] = useState<LocalFolder[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
+  const [editingFolderTitle, setEditingFolderTitle] = useState('')
+  const [movingDocId, setMovingDocId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState('')
   const [loading, setLoading] = useState(true)
   const [save, setSave] = useState<SaveState>('idle')
@@ -297,10 +300,18 @@ export default function WritingWorkspace() {
     await refresh(activeId)
   }
 
+
   const renderDocumentRow = (d: LocalDocument) => {
     const isActive = d.id === activeId
     return (
-      <div className={`document-row ${isActive ? 'active' : ''}`} key={d.id}>
+      <div
+        className={`document-row ${isActive ? 'active' : ''}`}
+        key={d.id}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', d.id)
+        }}
+      >
         <button
           type="button"
           className="doc-select-btn"
@@ -314,6 +325,17 @@ export default function WritingWorkspace() {
           </span>
         </button>
         <div className="doc-actions">
+          <button
+            type="button"
+            className="doc-action-btn"
+            title={t('Move to folder')}
+            onClick={e => {
+              e.stopPropagation()
+              setMovingDocId(d.id)
+            }}
+          >
+            <CornerRightUp size={14} />
+          </button>
           <button
             type="button"
             className="doc-action-btn"
@@ -354,6 +376,16 @@ export default function WritingWorkspace() {
     )
   }
 
+
+
+
+  const renameFolder = async (id: string, newTitle: string) => {
+    if (newTitle.trim()) {
+      await db.folders.update(id, { title: newTitle.trim() })
+      await refresh(activeId)
+    }
+    setEditingFolderId(null)
+  }
 
   const createFolder = async () => {
     const f = newFolder(t('New folder'))
@@ -563,21 +595,61 @@ export default function WritingWorkspace() {
             const isExpanded = expandedFolders.has(f.id)
             const folderDocs = docs.filter(d => d.folderId === f.id)
             return (
-              <div key={f.id} className="folder-group">
+
+              <div
+                key={f.id}
+                className="folder-group"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={async (e) => {
+                  e.preventDefault()
+                  const docId = e.dataTransfer.getData('text/plain')
+                  if (docId) {
+                    await db.documents.update(docId, { folderId: f.id })
+                    await refresh(activeId)
+                  }
+                }}
+              >
                 <div className="folder-row">
-                  <button
-                    className="folder-toggle"
-                    onClick={() => {
-                      const next = new Set(expandedFolders)
-                      if (isExpanded) next.delete(f.id)
-                      else next.add(f.id)
-                      setExpandedFolders(next)
-                    }}
-                  >
-                    {isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
-                    <span className="folder-title">{f.title}</span>
-                  </button>
+                  {editingFolderId === f.id ? (
+                    <input
+                      className="folder-rename-input"
+                      autoFocus
+                      value={editingFolderTitle}
+                      onChange={e => setEditingFolderTitle(e.target.value)}
+                      onBlur={() => void renameFolder(f.id, editingFolderTitle)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') void renameFolder(f.id, editingFolderTitle)
+                        if (e.key === 'Escape') setEditingFolderId(null)
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  ) : (
+                    <button
+                      className="folder-toggle"
+                      onClick={() => {
+                        const next = new Set(expandedFolders)
+                        if (isExpanded) next.delete(f.id)
+                        else next.add(f.id)
+                        setExpandedFolders(next)
+                      }}
+                    >
+                      {isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
+                      <span className="folder-title">{f.title}</span>
+                    </button>
+                  )}
+
                   <div className="doc-actions">
+                    <button
+                      className="doc-action-btn"
+                      title={t('Rename folder')}
+                      onClick={(e) => {
+                         e.stopPropagation()
+                         setEditingFolderTitle(f.title)
+                         setEditingFolderId(f.id)
+                      }}
+                    >
+                      <Edit2 size={14} />
+                    </button>
                     <button
                       className="doc-action-btn"
                       title={t('New document in folder')}
@@ -603,6 +675,7 @@ export default function WritingWorkspace() {
                   </div>
                 </div>
 
+
                 {isExpanded && (
                   <div className="folder-contents">
                     {folderDocs.map(d => renderDocumentRow(d))}
@@ -614,7 +687,24 @@ export default function WritingWorkspace() {
           })}
 
           {/* Uncategorized or Search Results */}
-          {(needle ? filtered : docs.filter(d => !d.folderId)).map(d => renderDocumentRow(d))}
+
+          {/* Uncategorized or Search Results */}
+          <div
+            className="uncategorized-zone"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={async (e) => {
+              e.preventDefault()
+              const docId = e.dataTransfer.getData('text/plain')
+              if (docId) {
+                await db.documents.update(docId, { folderId: undefined })
+                await refresh(activeId)
+              }
+            }}
+          >
+            {(needle ? filtered : docs.filter(d => !d.folderId)).map(d => renderDocumentRow(d))}
+            {!needle && docs.filter(d => !d.folderId).length === 0 && <div className="uncategorized-empty-drop" />}
+          </div>
+
 
         </div>
 
@@ -845,6 +935,37 @@ export default function WritingWorkspace() {
       )}
 
       {/* Delete Document Confirmation Modal */}
+
+      {movingDocId && (
+        <Modal title={t('Move to folder')} onClose={() => setMovingDocId(null)}>
+          <div className="move-modal-list">
+            <button
+              className="button move-item"
+              onClick={async () => {
+                await db.documents.update(movingDocId, { folderId: undefined })
+                await refresh(activeId)
+                setMovingDocId(null)
+              }}
+            >
+              {t('Uncategorized')}
+            </button>
+            {folders.map(f => (
+              <button
+                key={f.id}
+                className="button move-item"
+                onClick={async () => {
+                  await db.documents.update(movingDocId, { folderId: f.id })
+                  await refresh(activeId)
+                  setMovingDocId(null)
+                }}
+              >
+                <Folder size={14} /> {f.title}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
       {docToDelete && (
         <Modal title={t('Delete document')} onClose={() => setDocToDelete(null)}>
             <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
