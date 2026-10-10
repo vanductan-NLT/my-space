@@ -16,8 +16,9 @@
 .documents {
   min-width: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border);
-  background: var(--surface-trans);
+
+  background: var(--surface-dim, #f7f7f5); /* Notion-like light gray */
+  border-right: 1px solid var(--border-subtle, rgba(0,0,0,0.05));
   display: flex;
   flex-direction: column;
 }
@@ -30,7 +31,7 @@
 }
 
 .docs-head h1 {
-  font: 600 18px Outfit, sans-serif;
+  font: 500 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   margin: 0;
   color: var(--text);
 }
@@ -42,8 +43,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--surface-hi);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 4px;
   border-radius: 11px;
   color: var(--muted);
   transition: border-color 0.15s ease;
@@ -86,11 +89,13 @@
 }
 
 .document-row:hover {
-  background: var(--surface-hi);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
 }
 
 .document-row.active {
-  background: var(--surface-hi);
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
 }
 
 /* A slim accent bar marks the open item without tinting the whole row. */
@@ -1130,4 +1135,48 @@
 .bubble > .bubble-dd:not(:first-child) .bubble-dd-panel {
   left: auto;
   right: 0;
+}
+
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 0 8px 2px;
+  cursor: pointer;
+}
+.folder-row:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+.folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--fg);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 4px;
+  cursor: pointer;
+  flex: 1;
+  text-align: left;
+}
+.folder-toggle svg {
+  color: var(--fg-muted);
+}
+.folder-contents {
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+  margin-left: 16px;
+  margin-bottom: 8px;
+  border-left: 1px solid rgba(0,0,0,0.05);
+}
+.pinned-icon {
+  margin-right: 6px;
+  color: var(--fg-muted);
+  vertical-align: middle;
 }
