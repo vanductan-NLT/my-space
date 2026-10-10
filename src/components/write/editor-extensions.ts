@@ -18,6 +18,7 @@ import FontFamily from '@tiptap/extension-font-family'
 import { getLang, translate } from '@/lib/i18n'
 import { FontSize } from './font-size'
 import { ImageNode } from './image-node'
+import { CalloutNode } from './callout-node'
 
 /** The shared schema used for editing, rich clipboard paste and HTML import. */
 export const writeExtensions = [
@@ -41,6 +42,7 @@ export const writeExtensions = [
   TableHeader,
   TableCell,
   ImageNode,
+  CalloutNode,
   TextStyle,
   Color,
   Highlight.configure({ multicolor: true }),

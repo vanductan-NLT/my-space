@@ -2,7 +2,7 @@
 
 import type { Editor } from '@tiptap/react'
 import {
-  AlignCenter, AlignJustify, AlignLeft, AlignRight, Ban, CheckSquare, ChevronDown, Code2, Heading1, Heading2, Heading3, List,
+  AlignCenter, AlignJustify, AlignLeft, AlignRight, Ban, CheckSquare, ChevronDown, Code2, Heading1, Heading2, Heading3, Lightbulb, List,
   ListOrdered, Quote, RemoveFormatting, Subscript, Superscript, Type,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -144,6 +144,7 @@ const BLOCKS = [
   { label: 'Bulleted list', icon: <List size={15} />, active: (e: Editor) => e.isActive('bulletList'), run: (e: Editor) => e.chain().focus().toggleBulletList().run() },
   { label: 'Numbered list', icon: <ListOrdered size={15} />, active: (e: Editor) => e.isActive('orderedList'), run: (e: Editor) => e.chain().focus().toggleOrderedList().run() },
   { label: 'To-do list', icon: <CheckSquare size={15} />, active: (e: Editor) => e.isActive('taskList'), run: (e: Editor) => e.chain().focus().toggleTaskList().run() },
+  { label: 'Callout', icon: <Lightbulb size={15} />, active: (e: Editor) => e.isActive('callout'), run: (e: Editor) => e.chain().focus().toggleCallout().run() },
   { label: 'Quote', icon: <Quote size={15} />, active: (e: Editor) => e.isActive('blockquote'), run: (e: Editor) => e.chain().focus().toggleBlockquote().run() },
   { label: 'Code', icon: <Code2 size={15} />, active: (e: Editor) => e.isActive('codeBlock'), run: (e: Editor) => e.chain().focus().toggleCodeBlock().run() },
 ]

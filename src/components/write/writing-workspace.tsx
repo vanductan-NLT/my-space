@@ -5,8 +5,9 @@ import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import {
-  Folder, FolderOpen, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
+  Folder, ChevronRight, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
   PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
+  FolderPlus, Sparkles,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { db, exportBackup, importBackup, isQuotaError, parseBackup } from '@/lib/db'
@@ -50,6 +51,9 @@ const mod = () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+')
 // Below this width the document list is an overlay, not a column.
 const isNarrow = () => window.matchMedia('(max-width: 700px)').matches
 
+const FOLDER_EMOJIS = ['📁', '🎓', '💻', '🔬', '📚', '🚀', '📝', '🎯', '⭐', '⚙️', '🧪', '💡']
+const DOC_EMOJIS = ['📄', '🎓', '💻', '🔬', '📝', '💡', '📊', '🚀', '📌', '🎯', '⚙️', '🧪', '📖', '📁', '☕', '✅', '⚠️', '💬']
+
 export default function WritingWorkspace() {
   const { t } = useI18n()
   // Untitled documents keep the default name in whatever language is shown.
@@ -68,6 +72,21 @@ export default function WritingWorkspace() {
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState<{ text: string; error?: boolean; offerExport?: boolean } | null>(null)
 
+  // New folder dialog state
+  const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [newFolderIcon, setNewFolderIcon] = useState('📁')
+
+  // Safe delete folder state
+  const [folderToDelete, setFolderToDelete] = useState<LocalFolder | null>(null)
+  const [deleteWithDocs, setDeleteWithDocs] = useState(false)
+
+  // Drag and drop feedback state
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
+  const [dragOverUncategorized, setDragOverUncategorized] = useState(false)
+
+  // Document page icon picker state
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
   // Link dialog state
   const [linkOpen, setLinkOpen] = useState(false)
@@ -91,8 +110,9 @@ export default function WritingWorkspace() {
     return () => clearTimeout(t)
   }, [notice])
   const active = docs.find(d => d.id === activeId)
+  const activeFolder = active?.folderId ? folders.find(f => f.id === active.folderId) : undefined
 
-  const autosave = useAutosave<Partial<Pick<LocalDocument, 'title' | 'content' | 'font'>>>({
+  const autosave = useAutosave<Partial<Pick<LocalDocument, 'title' | 'content' | 'font' | 'icon'>>>({
     delay: 650,
     write: async (id, patch) => {
       const title = patch.title === undefined ? {} : { title: patch.title.trim() || t('Untitled document') }
@@ -121,7 +141,7 @@ export default function WritingWorkspace() {
     const allFolders = await db.folders.toArray()
     setFolders(allFolders.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
     setDocs(all.sort((a, b) => {
-      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
       return b.updatedAt.localeCompare(a.updatedAt)
     }))
     const wanted = id || localStorage.getItem('my-space:last-document') || all[0]?.id
@@ -146,7 +166,7 @@ export default function WritingWorkspace() {
         if (!all.length) {
           // Fixed id + put: seeding twice (StrictMode, two tabs) can't create duplicates.
           const tt = (key: string) => translate(key, undefined, detectLang())
-          const first = { ...newDocument(tt('Welcome to My Space')), id: 'welcome' }
+          const first = { ...newDocument(tt('Welcome to My Space'), '🎓'), id: 'welcome' }
           first.content = {
             type: 'doc',
             content: [
@@ -156,8 +176,14 @@ export default function WritingWorkspace() {
                 content: [{ type: 'text', text: tt('A quiet place for clear thinking.') }],
               },
               {
-                type: 'paragraph',
-                content: [{ type: 'text', text: tt('Everything you write stays in this browser. Type “/” for blocks, or select text to format it.') }],
+                type: 'callout',
+                attrs: { icon: '💡' },
+                content: [
+                  {
+                    type: 'paragraph',
+                    content: [{ type: 'text', text: tt('Everything you write stays in this browser. Type “/” for blocks, or select text to format it.') }],
+                  },
+                ],
               },
             ],
           }
@@ -195,11 +221,6 @@ export default function WritingWorkspace() {
       content: active?.content ?? EMPTY_CONTENT,
       editorProps: {
         attributes: { class: 'prose-editor', 'aria-label': translate('Document content', undefined, getLang()) },
-        // Keep supported inline styles from rich clipboard HTML. Tiptap still
-        // parses the paste through this schema, so unsupported tags and
-        // attributes are discarded without flattening colours, font choices,
-        // font sizes, highlighting or paragraph alignment.
-        // Paste or drop images straight into the page.
         handlePaste: (view, event) => {
           const files = [...(event.clipboardData?.files ?? [])].filter(isImageFile)
           if (files.length) {
@@ -208,9 +229,6 @@ export default function WritingWorkspace() {
             return true
           }
 
-          // Some tools put Markdown—not rich HTML—on the clipboard. Recognise
-          // block Markdown (including escaped Markdown copied from chat), turn
-          // it into schema-safe HTML, and insert actual headings/lists/tables.
           const clipboard = event.clipboardData
           const text = clipboard?.getData('text/plain') ?? ''
           if (looksLikeMarkdown(text)) {
@@ -241,9 +259,6 @@ export default function WritingWorkspace() {
         autosave.queue(activeId, { content })
       },
     },
-    // One editor per document: it is created with that document's content and
-    // its own undo history. Never push state back into a live editor on every
-    // keystroke — that resets the cursor and wipes undo.
     [activeId, contentVersion]
   )
 
@@ -251,8 +266,6 @@ export default function WritingWorkspace() {
     if (activeId) localStorage.setItem('my-space:last-document', activeId)
   }, [activeId])
 
-  // Shrinking to phone width turns the list into an overlay; close it so it
-  // doesn't suddenly cover the editor.
   useEffect(() => {
     const query = window.matchMedia('(max-width: 700px)')
     const onChange = () => query.matches && setSidebar(false)
@@ -282,7 +295,6 @@ export default function WritingWorkspace() {
     setLinkOpen(true)
   }, [editor])
 
-  // Keyboard shortcut for inserting a link. Escape is handled by the shared full mode.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -294,109 +306,45 @@ export default function WritingWorkspace() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [openLinkDialog])
 
-
   const togglePin = async (d: LocalDocument) => {
     await db.documents.update(d.id, { isPinned: !d.isPinned })
     await refresh(activeId)
   }
 
-
-  const renderDocumentRow = (d: LocalDocument) => {
-    const isActive = d.id === activeId
-    return (
-      <div
-        className={`document-row ${isActive ? 'active' : ''}`}
-        key={d.id}
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', d.id)
-        }}
-      >
-        <button
-          type="button"
-          className="doc-select-btn"
-          onClick={() => selectDocument(d.id)}
-          aria-current={isActive ? 'true' : undefined}
-        >
-          <span className="doc-title">{d.isPinned && <Pin size={12} className="pinned-icon" />}{titleOf(d.title)}</span>
-          <span className="doc-meta">
-            {timeAgo(d.updatedAt)}
-            {preview(d) && <> · {preview(d)}</>}
-          </span>
-        </button>
-        <div className="doc-actions">
-          <button
-            type="button"
-            className="doc-action-btn"
-            title={t('Move to folder')}
-            onClick={e => {
-              e.stopPropagation()
-              setMovingDocId(d.id)
-            }}
-          >
-            <CornerRightUp size={14} />
-          </button>
-          <button
-            type="button"
-            className="doc-action-btn"
-            title={d.isPinned ? t('Unpin document') : t('Pin document')}
-            onClick={e => {
-              e.stopPropagation()
-              void togglePin(d)
-            }}
-          >
-            {d.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
-          </button>
-          <button
-            type="button"
-            className="doc-action-btn"
-            title={t('Duplicate document')}
-            aria-label={t('Duplicate {title}', { title: titleOf(d.title) })}
-            onClick={e => {
-              e.stopPropagation()
-              void duplicate(d)
-            }}
-          >
-            <Copy size={14} />
-          </button>
-          <button
-            type="button"
-            className="doc-action-btn delete-btn"
-            title={t('Delete document')}
-            aria-label={t('Delete {title}', { title: titleOf(d.title) })}
-            onClick={e => {
-              e.stopPropagation()
-              setDocToDelete(d)
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-    )
+  const updateDocIcon = async (icon: string) => {
+    if (!active) return
+    setDocs(v => v.map(d => (d.id === active.id ? { ...d, icon } : d)))
+    await db.documents.update(active.id, { icon, updatedAt: new Date().toISOString() })
+    setIconPickerOpen(false)
   }
-
-
-
 
   const renameFolder = async (id: string, newTitle: string) => {
     if (newTitle.trim()) {
-      await db.folders.update(id, { title: newTitle.trim() })
+      await db.folders.update(id, { title: newTitle.trim(), updatedAt: new Date().toISOString() })
       await refresh(activeId)
     }
     setEditingFolderId(null)
   }
 
-  const createFolder = async () => {
-    const f = newFolder(t('New folder'))
+  const handleCreateFolder = async () => {
+    const title = newFolderName.trim() || t('New folder')
+    const f = newFolder(title, newFolderIcon)
     await db.folders.add(f)
+    setExpandedFolders(prev => new Set(prev).add(f.id))
+    setNewFolderOpen(false)
+    setNewFolderName('')
+    setNewFolderIcon('📁')
     await refresh(activeId)
+    setNotice({ text: t('Created folder "{title}"', { title: f.title }) })
   }
 
   const create = async (folderId?: string) => {
     await autosave.flush()
-    const d = { ...newDocument(t('Untitled document')), folderId }
+    const d = { ...newDocument(t('Untitled document'), folderId ? '📝' : '📄'), folderId }
     await db.documents.add(d)
+    if (folderId) {
+      setExpandedFolders(prev => new Set(prev).add(folderId))
+    }
     setQuery('')
     if (isNarrow()) setSidebar(false)
     focusTitleNext.current = true
@@ -438,11 +386,215 @@ export default function WritingWorkspace() {
     setNotice({ text: t('Deleted "{title}"', { title: titleOf(target.title) }) })
   }
 
+  const handleSafeDeleteFolder = async () => {
+    if (!folderToDelete) return
+    const f = folderToDelete
+    const docsInFolder = docs.filter(d => d.folderId === f.id)
+
+    if (deleteWithDocs) {
+      for (const d of docsInFolder) {
+        await db.documents.delete(d.id)
+      }
+    } else {
+      for (const d of docsInFolder) {
+        await db.documents.update(d.id, { folderId: undefined, updatedAt: new Date().toISOString() })
+      }
+    }
+
+    await db.folders.delete(f.id)
+    setFolderToDelete(null)
+    setDeleteWithDocs(false)
+    await refresh(activeId)
+    setNotice({ text: t('Deleted "{title}"', { title: f.title }) })
+  }
+
+  const applyTemplate = (type: 'thesis' | 'progress' | 'meeting' | 'blank') => {
+    if (!editor || !active) return
+    if (type === 'blank') {
+      editor.commands.clearContent(true)
+      editor.commands.focus()
+      return
+    }
+
+    let html = ''
+    let newTitle = ''
+    let icon = '📄'
+
+    if (type === 'thesis') {
+      newTitle = t('Thesis / Project outline')
+      icon = '🎓'
+      html = `
+        <h1>${t('Thesis / Project outline')}</h1>
+        <div data-type="callout" data-icon="💡" class="notion-callout">
+          <span class="callout-icon" contenteditable="false">💡</span>
+          <div class="callout-body"><p>Lưu ý: Hạn nộp đề cương và báo cáo định kỳ theo hướng dẫn của Giảng viên.</p></div>
+        </div>
+        <h2>1. Tổng quan & Đặt vấn đề</h2>
+        <p>Mô tả ngắn gọn bối cảnh nghiên cứu, tính cấp thiết và bài toán thực tế cần giải quyết...</p>
+        <h2>2. Công nghệ & Kiến trúc dự kiến</h2>
+        <ul>
+          <li><p>Frontend / Ứng dụng: Next.js, React, Tailwind CSS...</p></li>
+          <li><p>Backend / API: Node.js, Python, PostgreSQL / Dexie...</p></li>
+          <li><p>Mô hình / Thuật toán: AI / Machine Learning, Cloud Services...</p></li>
+        </ul>
+        <h2>3. Kế hoạch các mốc tiến độ (Milestones)</h2>
+        <ul data-type="taskList">
+          <li data-type="taskItem" data-checked="false"><p>Thu thập tài liệu và khảo sát hiện trạng</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Thiết kế kiến trúc hệ thống và cơ sở dữ liệu</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Phát triển chức năng cốt lõi (Core features)</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Thử nghiệm, đánh giá kết quả và viết báo cáo</p></li>
+        </ul>
+        <h2>4. Bảng phân công & Dự kiến thời gian</h2>
+        <table>
+          <thead><tr><th><p>Giai đoạn</p></th><th><p>Nội dung</p></th><th><p>Hạn chót</p></th></tr></thead>
+          <tbody>
+            <tr><td><p>Sprint 1</p></td><td><p>Khảo sát & Thiết kế</p></td><td><p>Tuần 2</p></td></tr>
+            <tr><td><p>Sprint 2</p></td><td><p>Xây dựng nguyên mẫu (MVP)</p></td><td><p>Tuần 6</p></td></tr>
+            <tr><td><p>Sprint 3</p></td><td><p>Hoàn thiện & Báo cáo</p></td><td><p>Tuần 10</p></td></tr>
+          </tbody>
+        </table>
+        <p></p>
+      `
+    } else if (type === 'progress') {
+      newTitle = t('Weekly progress report')
+      icon = '📋'
+      html = `
+        <h1>${t('Weekly progress report')}</h1>
+        <div data-type="callout" data-icon="📌" class="notion-callout">
+          <span class="callout-icon" contenteditable="false">📌</span>
+          <div class="callout-body"><p>Tiến độ: Đúng kế hoạch 🟢 | Mục tiêu tuần này: Hoàn thiện module chính</p></div>
+        </div>
+        <h2>1. Công việc đã hoàn thành</h2>
+        <ul data-type="taskList">
+          <li data-type="taskItem" data-checked="true"><p>Hoàn thành tài liệu phân tích yêu cầu</p></li>
+          <li data-type="taskItem" data-checked="true"><p>Thiết kế luồng dữ liệu và sơ đồ lớp</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Code giao diện người dùng bước đầu</p></li>
+        </ul>
+        <h2>2. Vấn đề & Thách thức cần giải quyết</h2>
+        <blockquote><p>Ghi lại các lỗi (bugs), khó khăn kỹ thuật hoặc vấn đề cần tham vấn ý kiến GVHD tại đây...</p></blockquote>
+        <h2>3. Kế hoạch công việc tuần tới</h2>
+        <ul data-type="taskList">
+          <li data-type="taskItem" data-checked="false"><p>Tích hợp API và kiểm thử luồng chức năng</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Chuẩn bị slide báo cáo cho buổi họp tiếp theo</p></li>
+        </ul>
+        <p></p>
+      `
+    } else if (type === 'meeting') {
+      newTitle = t('Supervisor meeting notes')
+      icon = '👨‍🏫'
+      html = `
+        <h1>${t('Supervisor meeting notes')}</h1>
+        <div data-type="callout" data-icon="👨‍🏫" class="notion-callout">
+          <span class="callout-icon" contenteditable="false">👨‍🏫</span>
+          <div class="callout-body"><p>Thời gian: [Điền ngày/giờ] | GVHD: TS. / ThS. [Họ và tên]</p></div>
+        </div>
+        <h2>1. Nội dung đã báo cáo</h2>
+        <ul>
+          <li><p>Tóm tắt các kết quả đạt được từ buổi họp trước</p></li>
+          <li><p>Demo sản phẩm hoặc trình bày sơ đồ hệ thống</p></li>
+        </ul>
+        <h2>2. Nhận xét & Đóng góp ý kiến của Thầy/Cô</h2>
+        <blockquote><p>Ghi chú lại chính xác các góp ý, định hướng phương pháp và tài liệu GVHD gợi ý đọc thêm...</p></blockquote>
+        <h2>3. Các việc cần sửa đổi và hoàn thành (Action Items)</h2>
+        <ul data-type="taskList">
+          <li data-type="taskItem" data-checked="false"><p>Chỉnh sửa cấu trúc chương 2 theo góp ý của thầy/cô</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Bổ sung thêm biểu đồ so sánh hiệu năng</p></li>
+          <li data-type="taskItem" data-checked="false"><p>Gửi lại bản cập nhật trước [Ngày hẹn]</p></li>
+        </ul>
+        <p></p>
+      `
+    }
+
+    editor.commands.setContent(html)
+    if (active.title === t('Untitled document') || !active.title) {
+      updateTitle(newTitle)
+    }
+    void updateDocIcon(icon)
+    editor.commands.focus('start')
+  }
+
+  const renderDocumentRow = (d: LocalDocument) => {
+    const isActive = d.id === activeId
+    return (
+      <div
+        className={`document-row ${isActive ? 'active' : ''}`}
+        key={d.id}
+        draggable
+        onDragStart={e => {
+          e.dataTransfer.setData('text/plain', d.id)
+        }}
+      >
+        <button
+          type="button"
+          className="doc-select-btn"
+          onClick={() => selectDocument(d.id)}
+          aria-current={isActive ? 'true' : undefined}
+        >
+          <span className="doc-title">
+            {d.isPinned && <Pin size={12} className="pinned-icon" />}
+            <span className="doc-icon">{d.icon || '📄'}</span>
+            {titleOf(d.title)}
+          </span>
+          <span className="doc-meta">
+            {timeAgo(d.updatedAt)}
+            {preview(d) && <> · {preview(d)}</>}
+          </span>
+        </button>
+        <div className="doc-actions">
+          <button
+            type="button"
+            className="doc-action-btn"
+            title={t('Move to folder')}
+            onClick={e => {
+              e.stopPropagation()
+              setMovingDocId(d.id)
+            }}
+          >
+            <CornerRightUp size={14} />
+          </button>
+          <button
+            type="button"
+            className="doc-action-btn"
+            title={d.isPinned ? t('Unpin note') : t('Pin note')}
+            onClick={e => {
+              e.stopPropagation()
+              void togglePin(d)
+            }}
+          >
+            {d.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+          </button>
+          <button
+            type="button"
+            className="doc-action-btn"
+            title={t('Duplicate document')}
+            aria-label={t('Duplicate {title}', { title: titleOf(d.title) })}
+            onClick={e => {
+              e.stopPropagation()
+              void duplicate(d)
+            }}
+          >
+            <Copy size={14} />
+          </button>
+          <button
+            type="button"
+            className="doc-action-btn delete-btn"
+            title={t('Delete document')}
+            aria-label={t('Delete {title}', { title: titleOf(d.title) })}
+            onClick={e => {
+              e.stopPropagation()
+              setDocToDelete(d)
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const backup = async () => {
-    // Documents come from memory, not IndexedDB: after a failed save the
-    // on-screen text is newer than what is stored.
     const stored = await exportBackup().catch(() => null)
-    const data = { format: 'my-space-backup' as const, version: 1 as const, exportedAt: new Date().toISOString(), documents: docs, boards: stored?.boards ?? [] }
+    const data = { format: 'my-space-backup' as const, version: 1 as const, exportedAt: new Date().toISOString(), documents: docs, boards: stored?.boards ?? [], folders }
     download(`my-space-${data.exportedAt.slice(0, 10)}.json`, JSON.stringify(data, null, 2))
   }
 
@@ -475,7 +627,6 @@ export default function WritingWorkspace() {
         if (ext === 'md' || ext === 'markdown') {
           d.content = generateJSON(markdownToHtml(raw), writeExtensions)
         } else if (ext === 'html' || ext === 'htm') {
-          // Parsed against the editor schema: scripts, style elements and unknown tags are dropped.
           d.content = generateJSON(raw, writeExtensions)
         } else {
           d.content = {
@@ -511,7 +662,6 @@ export default function WritingWorkspace() {
     } else {
       const url = /^(https?:|mailto:)/i.test(trimmed) ? trimmed : `https://${trimmed}`
       if (editor.state.selection.empty && !editor.isActive('link')) {
-        // Nothing selected: insert the address itself as a link instead of silently doing nothing.
         editor
           .chain()
           .focus()
@@ -531,7 +681,6 @@ export default function WritingWorkspace() {
     setLinkOpen(false)
   }
 
-  // First words of the body, so documents can be told apart without opening them.
   const preview = (d: LocalDocument) => plainText(d.content).replace(/\s+/g, ' ').trim().slice(0, 90)
   const needle = query.trim().toLowerCase()
   const filtered = needle
@@ -569,12 +718,24 @@ export default function WritingWorkspace() {
       <aside className="documents" aria-label={t('Documents')}>
         <div className="docs-head">
           <h1>{t('Documents')}</h1>
-          <button type="button" className="new-btn" onClick={createFolder} aria-label={t('New folder')} title={t('New folder')}>
-            <Folder size={15} />
-          </button>
-          <button type="button" className="new-btn" onClick={() => create(undefined)} aria-label={t('New document')}>
-            <Plus size={15} /> {t('New')}
-          </button>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              type="button"
+              className="new-btn"
+              onClick={() => {
+                setNewFolderName('')
+                setNewFolderIcon('📁')
+                setNewFolderOpen(true)
+              }}
+              aria-label={t('New folder')}
+              title={t('New folder')}
+            >
+              <FolderPlus size={15} />
+            </button>
+            <button type="button" className="new-btn" onClick={() => create(undefined)} aria-label={t('New document')}>
+              <Plus size={15} /> {t('New')}
+            </button>
+          </div>
         </div>
 
         <label className="search">
@@ -590,22 +751,40 @@ export default function WritingWorkspace() {
         <div className="document-list">
           {!filtered.length && needle && <p className="list-empty">{t('Nothing matches “{query}”.', { query: query.trim() })}</p>}
 
-          {/* Folders */}
+          {/* Folders Section */}
+          {!needle && folders.length > 0 && (
+            <div className="folders-section-header">
+              <span>{t('Folders')}</span>
+            </div>
+          )}
+
           {!needle && folders.map(f => {
             const isExpanded = expandedFolders.has(f.id)
             const folderDocs = docs.filter(d => d.folderId === f.id)
+            const isDragTarget = dragOverFolderId === f.id
             return (
-
               <div
                 key={f.id}
-                className="folder-group"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={async (e) => {
+                className={`folder-group ${isDragTarget ? 'drag-over' : ''}`}
+                onDragOver={e => {
                   e.preventDefault()
+                  if (dragOverFolderId !== f.id) setDragOverFolderId(f.id)
+                }}
+                onDragLeave={() => {
+                  if (dragOverFolderId === f.id) setDragOverFolderId(null)
+                }}
+                onDrop={async e => {
+                  e.preventDefault()
+                  setDragOverFolderId(null)
                   const docId = e.dataTransfer.getData('text/plain')
                   if (docId) {
-                    await db.documents.update(docId, { folderId: f.id })
+                    await db.documents.update(docId, { folderId: f.id, updatedAt: new Date().toISOString() })
+                    setExpandedFolders(prev => new Set(prev).add(f.id))
                     await refresh(activeId)
+                    const targetDoc = docs.find(d => d.id === docId)
+                    if (targetDoc) {
+                      setNotice({ text: t('Moved "{title}" to "{folder}"', { title: titleOf(targetDoc.title), folder: f.title }) })
+                    }
                   }
                 }}
               >
@@ -625,6 +804,7 @@ export default function WritingWorkspace() {
                     />
                   ) : (
                     <button
+                      type="button"
                       className="folder-toggle"
                       onClick={() => {
                         const next = new Set(expandedFolders)
@@ -633,79 +813,104 @@ export default function WritingWorkspace() {
                         setExpandedFolders(next)
                       }}
                     >
-                      {isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
+                      <ChevronRight size={14} className={`folder-chevron ${isExpanded ? 'open' : ''}`} />
+                      <span className="folder-icon">{f.icon || '📁'}</span>
                       <span className="folder-title">{f.title}</span>
+                      <span className="folder-count">{folderDocs.length}</span>
                     </button>
                   )}
 
                   <div className="doc-actions">
                     <button
-                      className="doc-action-btn"
-                      title={t('Rename folder')}
-                      onClick={(e) => {
-                         e.stopPropagation()
-                         setEditingFolderTitle(f.title)
-                         setEditingFolderId(f.id)
-                      }}
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button
+                      type="button"
                       className="doc-action-btn"
                       title={t('New document in folder')}
-                      onClick={(e) => { e.stopPropagation(); void create(f.id); }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        void create(f.id)
+                      }}
                     >
                       <Plus size={14} />
                     </button>
                     <button
-                      className="doc-action-btn delete-btn"
-                      title={t('Delete folder')}
-                      onClick={async (e) => {
-                         e.stopPropagation()
-                         if (confirm(t('Delete folder and all documents inside?'))) {
-                           await db.folders.delete(f.id)
-                           const toDelete = docs.filter(d => d.folderId === f.id)
-                           for (const d of toDelete) await db.documents.delete(d.id)
-                           await refresh(activeId)
-                         }
+                      type="button"
+                      className="doc-action-btn"
+                      title={t('Rename folder')}
+                      onClick={e => {
+                        e.stopPropagation()
+                        setEditingFolderTitle(f.title)
+                        setEditingFolderId(f.id)
                       }}
                     >
-                      <Trash2 size={14} />
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="doc-action-btn delete-btn"
+                      title={t('Delete folder')}
+                      onClick={e => {
+                        e.stopPropagation()
+                        setFolderToDelete(f)
+                        setDeleteWithDocs(false)
+                      }}
+                    >
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
 
-
                 {isExpanded && (
                   <div className="folder-contents">
                     {folderDocs.map(d => renderDocumentRow(d))}
-                    {folderDocs.length === 0 && <p className="list-empty">{t('Empty folder')}</p>}
+                    {folderDocs.length === 0 && (
+                      <div className="folder-empty-state">
+                        <p className="folder-empty-text">{t('Empty folder')}</p>
+                        <button
+                          type="button"
+                          className="folder-add-quick-btn"
+                          onClick={() => void create(f.id)}
+                        >
+                          <Plus size={13} /> {t('Create a document')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )
           })}
 
-          {/* Uncategorized or Search Results */}
+          {/* Uncategorized or Search Results Section */}
+          {!needle && folders.length > 0 && docs.some(d => !d.folderId) && (
+            <div className="folders-section-header" style={{ marginTop: 8 }}>
+              <span>{t('Uncategorized')}</span>
+            </div>
+          )}
 
-          {/* Uncategorized or Search Results */}
           <div
-            className="uncategorized-zone"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={async (e) => {
+            className={`uncategorized-zone ${dragOverUncategorized ? 'drag-over' : ''}`}
+            onDragOver={e => {
               e.preventDefault()
+              if (!dragOverUncategorized) setDragOverUncategorized(true)
+            }}
+            onDragLeave={() => setDragOverUncategorized(false)}
+            onDrop={async e => {
+              e.preventDefault()
+              setDragOverUncategorized(false)
               const docId = e.dataTransfer.getData('text/plain')
               if (docId) {
-                await db.documents.update(docId, { folderId: undefined })
+                await db.documents.update(docId, { folderId: undefined, updatedAt: new Date().toISOString() })
                 await refresh(activeId)
               }
             }}
           >
             {(needle ? filtered : docs.filter(d => !d.folderId)).map(d => renderDocumentRow(d))}
-            {!needle && docs.filter(d => !d.folderId).length === 0 && <div className="uncategorized-empty-drop" />}
+            {!needle && docs.filter(d => !d.folderId).length === 0 && folders.length > 0 && (
+              <div className="uncategorized-empty-drop">
+                {t('Drop here to remove from folder')}
+              </div>
+            )}
           </div>
-
-
         </div>
 
         <div className="docs-footer">
@@ -776,7 +981,7 @@ export default function WritingWorkspace() {
           </div>
         </header>
 
-        {/* Formatting Toolbar */}
+        {/* Formatting Toolbar for mobile */}
         {editor && <KeyboardBar editor={editor} onOpenLink={openLinkDialog} onPickImage={() => imageFileRef.current?.click()} />}
         <input
           ref={imageFileRef}
@@ -798,6 +1003,60 @@ export default function WritingWorkspace() {
               className={`page ${fontFamily(active.font) ? 'has-font' : ''}`}
               style={{ '--doc-font': fontFamily(active.font) ?? undefined } as React.CSSProperties}
             >
+              {/* Notion-style Breadcrumb */}
+              <div className="doc-breadcrumb">
+                <button
+                  type="button"
+                  className="breadcrumb-btn"
+                  onClick={() => setMovingDocId(active.id)}
+                  title={t('Move to folder')}
+                >
+                  <span>{activeFolder ? activeFolder.icon || '📁' : '📁'}</span>
+                  <span>{activeFolder ? activeFolder.title : t('Uncategorized')}</span>
+                </button>
+                <span className="breadcrumb-sep">/</span>
+                <span className="breadcrumb-current">{titleOf(active.title)}</span>
+              </div>
+
+              {/* Notion Page Icon Selector */}
+              <div className="page-header-row">
+                <button
+                  type="button"
+                  className="page-icon-trigger"
+                  onClick={() => setIconPickerOpen(v => !v)}
+                  title={active.icon ? t('Change icon') : t('Add page icon')}
+                >
+                  {active.icon || '📄'}
+                </button>
+
+                {iconPickerOpen && (
+                  <div className="emoji-picker-popover" onClick={e => e.stopPropagation()}>
+                    <div className="emoji-picker-title">{t('Folder icon')}</div>
+                    <div className="emoji-grid">
+                      {DOC_EMOJIS.map(emo => (
+                        <button
+                          key={emo}
+                          type="button"
+                          className={`emoji-btn ${active.icon === emo ? 'active' : ''}`}
+                          onClick={() => void updateDocIcon(emo)}
+                        >
+                          {emo}
+                        </button>
+                      ))}
+                    </div>
+                    {active.icon && (
+                      <button
+                        type="button"
+                        className="emoji-remove-btn"
+                        onClick={() => void updateDocIcon('📄')}
+                      >
+                        {t('Remove icon')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <input
                 ref={titleRef}
                 className="title-input"
@@ -806,9 +1065,6 @@ export default function WritingWorkspace() {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor) {
                     e.preventDefault()
-                    // focus('start') sets the caret now but moves DOM focus in a later
-                    // animation frame; focus the view synchronously so the next
-                    // keystroke can't land in the title.
                     editor.commands.focus('start')
                     editor.view.focus()
                   }
@@ -816,6 +1072,61 @@ export default function WritingWorkspace() {
                 aria-label={t('Document title')}
                 placeholder={t('Untitled document')}
               />
+
+              {/* Notion Project Templates when note is empty */}
+              {editor && plainText(active.content).trim() === '' && (
+                <div className="templates-container">
+                  <div className="templates-header">
+                    <Sparkles size={14} /> {t('Use a project template')}
+                  </div>
+                  <div className="templates-grid">
+                    <button
+                      type="button"
+                      className="template-card"
+                      onClick={() => applyTemplate('thesis')}
+                    >
+                      <span className="template-icon">🎓</span>
+                      <div className="template-info">
+                        <strong>{t('Thesis / Project outline')}</strong>
+                        <small>Mục tiêu, công nghệ & các mốc tiến độ</small>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="template-card"
+                      onClick={() => applyTemplate('progress')}
+                    >
+                      <span className="template-icon">📋</span>
+                      <div className="template-info">
+                        <strong>{t('Weekly progress report')}</strong>
+                        <small>Checklist việc đã làm & kế hoạch tuần</small>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="template-card"
+                      onClick={() => applyTemplate('meeting')}
+                    >
+                      <span className="template-icon">👨‍🏫</span>
+                      <div className="template-info">
+                        <strong>{t('Supervisor meeting notes')}</strong>
+                        <small>Báo cáo nội dung & góp ý của GVHD</small>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="template-card"
+                      onClick={() => applyTemplate('blank')}
+                    >
+                      <span className="template-icon">📝</span>
+                      <div className="template-info">
+                        <strong>{t('Blank note')}</strong>
+                        <small>Bắt đầu viết từ trang trắng</small>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {editor && (
                 <>
@@ -865,7 +1176,7 @@ export default function WritingWorkspace() {
                     </BubbleDropdown>
                   </BubbleMenu>
 
-                  {/* Inside a table → row/column tools (the only place they live on desktop). */}
+                  {/* Inside a table → row/column tools */}
                   <BubbleMenu
                     editor={editor}
                     pluginKey="tableBubble"
@@ -904,82 +1215,178 @@ export default function WritingWorkspace() {
         </div>
       </section>
 
-      {/* Link Dialog Modal */}
-      {linkOpen && (
-        <Modal title={t(editor?.isActive('link') ? 'Edit link' : 'Insert link')} onClose={() => setLinkOpen(false)}>
+      {/* New Folder Modal */}
+      {newFolderOpen && (
+        <Modal title={t('Create folder')} onClose={() => setNewFolderOpen(false)}>
+          <div className="modal-form-group">
+            <label className="modal-label">{t('Folder name')}</label>
             <input
-              className="input"
-              value={linkUrl}
-              onChange={e => setLinkUrl(e.target.value)}
-              placeholder="https://example.com"
-              aria-label={t('Link address')}
-              data-autofocus
+              className="modal-input"
+              autoFocus
+              placeholder="e.g. Đồ án tốt nghiệp 2026, Nghiên cứu AI..."
+              value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter') applyLink()
+                if (e.key === 'Enter') void handleCreateFolder()
               }}
             />
-            <div className="modal-footer">
-              {editor?.isActive('link') && (
-                <button type="button" className="button danger" onClick={removeLink}>
-                  <Unlink size={15} /> {t('Remove')}
+          </div>
+
+          <div className="modal-form-group">
+            <label className="modal-label">{t('Folder icon')}</label>
+            <div className="modal-emoji-row">
+              {FOLDER_EMOJIS.map(emo => (
+                <button
+                  key={emo}
+                  type="button"
+                  className={`emoji-btn ${newFolderIcon === emo ? 'active' : ''}`}
+                  onClick={() => setNewFolderIcon(emo)}
+                >
+                  {emo}
                 </button>
-              )}
-              <button type="button" className="button" onClick={() => setLinkOpen(false)}>
-                {t('Cancel')}
-              </button>
-              <button type="button" className="button primary" onClick={applyLink}>
-                {t('Save link')}
-              </button>
+              ))}
             </div>
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="button" onClick={() => setNewFolderOpen(false)}>
+              {t('Cancel')}
+            </button>
+            <button type="button" className="button primary" onClick={() => void handleCreateFolder()}>
+              {t('Create folder')}
+            </button>
+          </div>
         </Modal>
       )}
 
-      {/* Delete Document Confirmation Modal */}
+      {/* Safe Delete Folder Modal */}
+      {folderToDelete && (
+        <Modal title={t('Delete folder')} onClose={() => setFolderToDelete(null)}>
+          <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--text)' }}>
+            {rich(t('Are you sure you want to delete folder **“{title}”**?', { title: folderToDelete.title }))}
+          </p>
 
+          {docs.filter(d => d.folderId === folderToDelete.id).length > 0 && (
+            <div className="delete-options-list">
+              <label className={`delete-option-card ${!deleteWithDocs ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="delete-folder-choice"
+                  checked={!deleteWithDocs}
+                  onChange={() => setDeleteWithDocs(false)}
+                />
+                <div className="delete-option-info">
+                  <strong>{t('Delete folder only')}</strong>
+                  <small>
+                    Giữ lại {docs.filter(d => d.folderId === folderToDelete.id).length} tài liệu và chuyển ra danh sách Chưa phân loại.
+                  </small>
+                </div>
+              </label>
+
+              <label className={`delete-option-card ${deleteWithDocs ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="delete-folder-choice"
+                  checked={deleteWithDocs}
+                  onChange={() => setDeleteWithDocs(true)}
+                />
+                <div className="delete-option-info">
+                  <strong style={{ color: 'var(--danger)' }}>{t('Delete folder and notes')}</strong>
+                  <small>
+                    Xoá vĩnh viễn cả thư mục cùng tất cả {docs.filter(d => d.folderId === folderToDelete.id).length} tài liệu bên trong.
+                  </small>
+                </div>
+              </label>
+            </div>
+          )}
+
+          <div className="modal-footer">
+            <button type="button" className="button" onClick={() => setFolderToDelete(null)}>
+              {t('Cancel')}
+            </button>
+            <button type="button" className="button danger" onClick={() => void handleSafeDeleteFolder()}>
+              {t('Delete')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Link Dialog Modal */}
+      {linkOpen && (
+        <Modal title={t(editor?.isActive('link') ? 'Edit link' : 'Insert link')} onClose={() => setLinkOpen(false)}>
+          <input
+            className="input"
+            value={linkUrl}
+            onChange={e => setLinkUrl(e.target.value)}
+            placeholder="https://example.com"
+            aria-label={t('Link address')}
+            data-autofocus
+            onKeyDown={e => {
+              if (e.key === 'Enter') applyLink()
+            }}
+          />
+          <div className="modal-footer">
+            {editor?.isActive('link') && (
+              <button type="button" className="button danger" onClick={removeLink}>
+                <Unlink size={15} /> {t('Remove')}
+              </button>
+            )}
+            <button type="button" className="button" onClick={() => setLinkOpen(false)}>
+              {t('Cancel')}
+            </button>
+            <button type="button" className="button primary" onClick={applyLink}>
+              {t('Save link')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Move Document Modal */}
       {movingDocId && (
         <Modal title={t('Move to folder')} onClose={() => setMovingDocId(null)}>
           <div className="move-modal-list">
             <button
               className="button move-item"
               onClick={async () => {
-                await db.documents.update(movingDocId, { folderId: undefined })
+                await db.documents.update(movingDocId, { folderId: undefined, updatedAt: new Date().toISOString() })
                 await refresh(activeId)
                 setMovingDocId(null)
               }}
             >
-              {t('Uncategorized')}
+              <span>📁</span> {t('Uncategorized')}
             </button>
             {folders.map(f => (
               <button
                 key={f.id}
                 className="button move-item"
                 onClick={async () => {
-                  await db.documents.update(movingDocId, { folderId: f.id })
+                  await db.documents.update(movingDocId, { folderId: f.id, updatedAt: new Date().toISOString() })
+                  setExpandedFolders(prev => new Set(prev).add(f.id))
                   await refresh(activeId)
                   setMovingDocId(null)
                 }}
               >
-                <Folder size={14} /> {f.title}
+                <span>{f.icon || '📁'}</span> {f.title}
               </button>
             ))}
           </div>
         </Modal>
       )}
 
+      {/* Delete Document Confirmation Modal */}
       {docToDelete && (
         <Modal title={t('Delete document')} onClose={() => setDocToDelete(null)}>
-            <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-              {rich(t('Are you sure you want to delete **“{title}”**? This action cannot be undone.', { title: titleOf(docToDelete.title) }))}
-            </p>
-            <div className="modal-footer">
-              {/* Cancel takes focus: Enter must never delete by accident. */}
-              <button type="button" className="button" onClick={() => setDocToDelete(null)} data-autofocus>
-                {t('Cancel')}
-              </button>
-              <button type="button" className="button danger" onClick={() => void confirmDelete()}>
-                {t('Delete')}
-              </button>
-            </div>
+          <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+            {rich(t('Are you sure you want to delete **“{title}”**? This action cannot be undone.', { title: titleOf(docToDelete.title) }))}
+          </p>
+          <div className="modal-footer">
+            <button type="button" className="button" onClick={() => setDocToDelete(null)} data-autofocus>
+              {t('Cancel')}
+            </button>
+            <button type="button" className="button danger" onClick={() => void confirmDelete()}>
+              {t('Delete')}
+            </button>
+          </div>
         </Modal>
       )}
 
