@@ -5,7 +5,7 @@ import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import {
-  Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
+  Folder, FolderOpen, Pin, PinOff, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
   PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -24,7 +24,7 @@ import { NodeSelection } from '@tiptap/pm/state'
 import { Modal } from '../modal'
 import { SaveIndicator } from '../save-indicator'
 import { MenuButton } from '../menu-button'
-import { EMPTY_CONTENT, newDocument, type LocalDocument, type SaveState } from '@/lib/models'
+import { EMPTY_CONTENT, newDocument, newFolder, type LocalDocument, type LocalFolder, type SaveState } from '@/lib/models'
 import { timeAgo } from '@/lib/time'
 import { detectLang, getLang, rich, translate, useI18n } from '@/lib/i18n'
 import './write.css'
@@ -55,6 +55,8 @@ export default function WritingWorkspace() {
   // Untitled documents keep the default name in whatever language is shown.
   const titleOf = (title: string) => (!title || title === 'Untitled document' || title === 'Tài liệu chưa đặt tên' ? t('Untitled document') : title)
   const [docs, setDocs] = useState<LocalDocument[]>([])
+  const [folders, setFolders] = useState<LocalFolder[]>([])
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [activeId, setActiveId] = useState('')
   const [loading, setLoading] = useState(true)
   const [save, setSave] = useState<SaveState>('idle')
@@ -113,7 +115,12 @@ export default function WritingWorkspace() {
 
   const refresh = useCallback(async (id?: string) => {
     const all = await db.documents.orderBy('updatedAt').reverse().toArray()
-    setDocs(all)
+    const allFolders = await db.folders.toArray()
+    setFolders(allFolders.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+    setDocs(all.sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      return b.updatedAt.localeCompare(a.updatedAt)
+    }))
     const wanted = id || localStorage.getItem('my-space:last-document') || all[0]?.id
     if (wanted) {
       setActiveId(all.some(d => d.id === wanted) ? wanted : all[0]?.id)
@@ -131,6 +138,8 @@ export default function WritingWorkspace() {
     void (async () => {
       try {
         let all = await db.documents.toArray()
+        const allFolders = await db.folders.toArray()
+        setFolders(allFolders.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
         if (!all.length) {
           // Fixed id + put: seeding twice (StrictMode, two tabs) can't create duplicates.
           const tt = (key: string) => translate(key, undefined, detectLang())
@@ -282,9 +291,79 @@ export default function WritingWorkspace() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [openLinkDialog])
 
-  const create = async () => {
+
+  const togglePin = async (d: LocalDocument) => {
+    await db.documents.update(d.id, { isPinned: !d.isPinned })
+    await refresh(activeId)
+  }
+
+  const renderDocumentRow = (d: LocalDocument) => {
+    const isActive = d.id === activeId
+    return (
+      <div className={`document-row ${isActive ? 'active' : ''}`} key={d.id}>
+        <button
+          type="button"
+          className="doc-select-btn"
+          onClick={() => selectDocument(d.id)}
+          aria-current={isActive ? 'true' : undefined}
+        >
+          <span className="doc-title">{d.isPinned && <Pin size={12} className="pinned-icon" />}{titleOf(d.title)}</span>
+          <span className="doc-meta">
+            {timeAgo(d.updatedAt)}
+            {preview(d) && <> · {preview(d)}</>}
+          </span>
+        </button>
+        <div className="doc-actions">
+          <button
+            type="button"
+            className="doc-action-btn"
+            title={d.isPinned ? t('Unpin document') : t('Pin document')}
+            onClick={e => {
+              e.stopPropagation()
+              void togglePin(d)
+            }}
+          >
+            {d.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+          </button>
+          <button
+            type="button"
+            className="doc-action-btn"
+            title={t('Duplicate document')}
+            aria-label={t('Duplicate {title}', { title: titleOf(d.title) })}
+            onClick={e => {
+              e.stopPropagation()
+              void duplicate(d)
+            }}
+          >
+            <Copy size={14} />
+          </button>
+          <button
+            type="button"
+            className="doc-action-btn delete-btn"
+            title={t('Delete document')}
+            aria-label={t('Delete {title}', { title: titleOf(d.title) })}
+            onClick={e => {
+              e.stopPropagation()
+              setDocToDelete(d)
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+
+  const createFolder = async () => {
+    const f = newFolder(t('New folder'))
+    await db.folders.add(f)
+    await refresh(activeId)
+  }
+
+  const create = async (folderId?: string) => {
     await autosave.flush()
-    const d = newDocument(t('Untitled document'))
+    const d = { ...newDocument(t('Untitled document')), folderId }
     await db.documents.add(d)
     setQuery('')
     if (isNarrow()) setSidebar(false)
@@ -458,7 +537,10 @@ export default function WritingWorkspace() {
       <aside className="documents" aria-label={t('Documents')}>
         <div className="docs-head">
           <h1>{t('Documents')}</h1>
-          <button type="button" className="new-btn" onClick={create} aria-label={t('New document')}>
+          <button type="button" className="new-btn" onClick={createFolder} aria-label={t('New folder')} title={t('New folder')}>
+            <Folder size={15} />
+          </button>
+          <button type="button" className="new-btn" onClick={() => create(undefined)} aria-label={t('New document')}>
             <Plus size={15} /> {t('New')}
           </button>
         </div>
@@ -475,51 +557,65 @@ export default function WritingWorkspace() {
 
         <div className="document-list">
           {!filtered.length && needle && <p className="list-empty">{t('Nothing matches “{query}”.', { query: query.trim() })}</p>}
-          {filtered.map(d => {
-            const isActive = d.id === activeId
+
+          {/* Folders */}
+          {!needle && folders.map(f => {
+            const isExpanded = expandedFolders.has(f.id)
+            const folderDocs = docs.filter(d => d.folderId === f.id)
             return (
-              <div className={`document-row ${isActive ? 'active' : ''}`} key={d.id}>
-                <button
-                  type="button"
-                  className="doc-select-btn"
-                  onClick={() => selectDocument(d.id)}
-                  aria-current={isActive ? 'true' : undefined}
-                >
-                  <span className="doc-title">{titleOf(d.title)}</span>
-                  <span className="doc-meta">
-                    {timeAgo(d.updatedAt)}
-                    {preview(d) && <> · {preview(d)}</>}
-                  </span>
-                </button>
-                <div className="doc-actions">
+              <div key={f.id} className="folder-group">
+                <div className="folder-row">
                   <button
-                    type="button"
-                    className="doc-action-btn"
-                    title={t('Duplicate document')}
-                    aria-label={t('Duplicate {title}', { title: titleOf(d.title) })}
-                    onClick={e => {
-                      e.stopPropagation()
-                      void duplicate(d)
+                    className="folder-toggle"
+                    onClick={() => {
+                      const next = new Set(expandedFolders)
+                      if (isExpanded) next.delete(f.id)
+                      else next.add(f.id)
+                      setExpandedFolders(next)
                     }}
                   >
-                    <Copy size={14} />
+                    {isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
+                    <span className="folder-title">{f.title}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="doc-action-btn delete-btn"
-                    title={t('Delete document')}
-                    aria-label={t('Delete {title}', { title: titleOf(d.title) })}
-                    onClick={e => {
-                      e.stopPropagation()
-                      setDocToDelete(d)
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="doc-actions">
+                    <button
+                      className="doc-action-btn"
+                      title={t('New document in folder')}
+                      onClick={(e) => { e.stopPropagation(); void create(f.id); }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      className="doc-action-btn delete-btn"
+                      title={t('Delete folder')}
+                      onClick={async (e) => {
+                         e.stopPropagation()
+                         if (confirm(t('Delete folder and all documents inside?'))) {
+                           await db.folders.delete(f.id)
+                           const toDelete = docs.filter(d => d.folderId === f.id)
+                           for (const d of toDelete) await db.documents.delete(d.id)
+                           await refresh(activeId)
+                         }
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
+
+                {isExpanded && (
+                  <div className="folder-contents">
+                    {folderDocs.map(d => renderDocumentRow(d))}
+                    {folderDocs.length === 0 && <p className="list-empty">{t('Empty folder')}</p>}
+                  </div>
+                )}
               </div>
             )
           })}
+
+          {/* Uncategorized or Search Results */}
+          {(needle ? filtered : docs.filter(d => !d.folderId)).map(d => renderDocumentRow(d))}
+
         </div>
 
         <div className="docs-footer">
@@ -710,7 +806,7 @@ export default function WritingWorkspace() {
           ) : (
             <div className="empty">
               <h2>{t('No documents found')}</h2>
-              <button className="button primary" onClick={create}>
+              <button className="button primary" onClick={() => create(undefined)}>
                 {t('Create a document')}
               </button>
             </div>
