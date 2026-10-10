@@ -6,6 +6,7 @@ import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import {
   Folder, FolderOpen, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
+
   PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -60,6 +61,7 @@ export default function WritingWorkspace() {
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
   const [editingFolderTitle, setEditingFolderTitle] = useState('')
   const [movingDocId, setMovingDocId] = useState<string | null>(null)
+
   const [activeId, setActiveId] = useState('')
   const [loading, setLoading] = useState(true)
   const [save, setSave] = useState<SaveState>('idle')
@@ -312,6 +314,7 @@ export default function WritingWorkspace() {
           e.dataTransfer.setData('text/plain', d.id)
         }}
       >
+
         <button
           type="button"
           className="doc-select-btn"
@@ -339,6 +342,7 @@ export default function WritingWorkspace() {
           <button
             type="button"
             className="doc-action-btn"
+
             title={d.isPinned ? t('Unpin document') : t('Pin document')}
             onClick={e => {
               e.stopPropagation()
@@ -386,6 +390,7 @@ export default function WritingWorkspace() {
     }
     setEditingFolderId(null)
   }
+
 
   const createFolder = async () => {
     const f = newFolder(t('New folder'))
@@ -590,6 +595,7 @@ export default function WritingWorkspace() {
         <div className="document-list">
           {!filtered.length && needle && <p className="list-empty">{t('Nothing matches “{query}”.', { query: query.trim() })}</p>}
 
+
           {/* Folders */}
           {!needle && folders.map(f => {
             const isExpanded = expandedFolders.has(f.id)
@@ -652,6 +658,7 @@ export default function WritingWorkspace() {
                     </button>
                     <button
                       className="doc-action-btn"
+
                       title={t('New document in folder')}
                       onClick={(e) => { e.stopPropagation(); void create(f.id); }}
                     >
@@ -674,6 +681,7 @@ export default function WritingWorkspace() {
                     </button>
                   </div>
                 </div>
+
 
 
                 {isExpanded && (
@@ -704,6 +712,7 @@ export default function WritingWorkspace() {
             {(needle ? filtered : docs.filter(d => !d.folderId)).map(d => renderDocumentRow(d))}
             {!needle && docs.filter(d => !d.folderId).length === 0 && <div className="uncategorized-empty-drop" />}
           </div>
+
 
 
         </div>
