@@ -5,7 +5,7 @@ import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import {
-  Folder, ChevronRight, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
+  ChevronRight, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
   PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
   FolderPlus, Sparkles,
 } from 'lucide-react'
