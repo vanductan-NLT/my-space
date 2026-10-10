@@ -1,10 +1,7 @@
 'use client'
 
 import type { Editor } from '@tiptap/react'
-import {
-  AlignCenter, AlignJustify, AlignLeft, AlignRight, Ban, CheckSquare, ChevronDown, Code2, Heading1, Heading2, Heading3, Lightbulb, List,
-  ListOrdered, Quote, RemoveFormatting, Subscript, Superscript, Type,
-} from 'lucide-react'
+import { GoogleIcon } from '../google-icon'
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/lib/i18n'
 
@@ -67,7 +64,7 @@ export function ColorPanel({ editor }: { editor: Editor }) {
       <div className="fmt-label">{t('Highlight')}</div>
       <div className="fmt-swatches">
         <button type="button" className="fmt-swatch" onMouseDown={keep} onClick={() => editor.chain().focus().unsetHighlight().run()} aria-pressed={!currentBg} title={t('None')} aria-label={t('None')}>
-          <Ban size={14} />
+          <GoogleIcon name="block" size={14} />
         </button>
         {HIGHLIGHTS.map(c => (
           <button key={c.value} type="button" className="fmt-swatch" onMouseDown={keep} onClick={() => editor.chain().focus().setHighlight({ color: c.value }).run()} aria-pressed={currentBg === c.value} title={t(c.name)} aria-label={t(c.name)}>
@@ -103,10 +100,10 @@ export function SizeButtons({ editor }: { editor: Editor }) {
 export function AlignButtons({ editor }: { editor: Editor }) {
   const { t } = useI18n()
   const items = [
-    { value: 'left', label: 'Align left', icon: <AlignLeft size={16} /> },
-    { value: 'center', label: 'Align center', icon: <AlignCenter size={16} /> },
-    { value: 'right', label: 'Align right', icon: <AlignRight size={16} /> },
-    { value: 'justify', label: 'Justify', icon: <AlignJustify size={16} /> },
+    { value: 'left', label: 'Align left', icon: <GoogleIcon name="format_align_left" size={16} /> },
+    { value: 'center', label: 'Align center', icon: <GoogleIcon name="format_align_center" size={16} /> },
+    { value: 'right', label: 'Align right', icon: <GoogleIcon name="format_align_right" size={16} /> },
+    { value: 'justify', label: 'Justify', icon: <GoogleIcon name="format_align_justify" size={16} /> },
   ]
   return (
     <div className="fmt-row">
@@ -124,29 +121,29 @@ export function MoreButtons({ editor }: { editor: Editor }) {
   return (
     <div className="fmt-row">
       <button type="button" className="fmt-icon" onMouseDown={keep} aria-pressed={editor.isActive('superscript')} onClick={() => editor.chain().focus().toggleSuperscript().run()} title={t('Superscript')} aria-label={t('Superscript')}>
-        <Superscript size={16} />
+        <GoogleIcon name="superscript" size={16} />
       </button>
       <button type="button" className="fmt-icon" onMouseDown={keep} aria-pressed={editor.isActive('subscript')} onClick={() => editor.chain().focus().toggleSubscript().run()} title={t('Subscript')} aria-label={t('Subscript')}>
-        <Subscript size={16} />
+        <GoogleIcon name="subscript" size={16} />
       </button>
       <button type="button" className="fmt-icon" onMouseDown={keep} onClick={() => editor.chain().focus().unsetAllMarks().run()} title={t('Clear formatting')} aria-label={t('Clear formatting')}>
-        <RemoveFormatting size={16} />
+        <GoogleIcon name="format_clear" size={16} />
       </button>
     </div>
   )
 }
 
 const BLOCKS = [
-  { label: 'Text', icon: <Type size={15} />, active: (e: Editor) => e.isActive('paragraph'), run: (e: Editor) => e.chain().focus().setParagraph().run() },
-  { label: 'Heading 1', icon: <Heading1 size={15} />, active: (e: Editor) => e.isActive('heading', { level: 1 }), run: (e: Editor) => e.chain().focus().setHeading({ level: 1 }).run() },
-  { label: 'Heading 2', icon: <Heading2 size={15} />, active: (e: Editor) => e.isActive('heading', { level: 2 }), run: (e: Editor) => e.chain().focus().setHeading({ level: 2 }).run() },
-  { label: 'Heading 3', icon: <Heading3 size={15} />, active: (e: Editor) => e.isActive('heading', { level: 3 }), run: (e: Editor) => e.chain().focus().setHeading({ level: 3 }).run() },
-  { label: 'Bulleted list', icon: <List size={15} />, active: (e: Editor) => e.isActive('bulletList'), run: (e: Editor) => e.chain().focus().toggleBulletList().run() },
-  { label: 'Numbered list', icon: <ListOrdered size={15} />, active: (e: Editor) => e.isActive('orderedList'), run: (e: Editor) => e.chain().focus().toggleOrderedList().run() },
-  { label: 'To-do list', icon: <CheckSquare size={15} />, active: (e: Editor) => e.isActive('taskList'), run: (e: Editor) => e.chain().focus().toggleTaskList().run() },
-  { label: 'Callout', icon: <Lightbulb size={15} />, active: (e: Editor) => e.isActive('callout'), run: (e: Editor) => e.chain().focus().toggleCallout().run() },
-  { label: 'Quote', icon: <Quote size={15} />, active: (e: Editor) => e.isActive('blockquote'), run: (e: Editor) => e.chain().focus().toggleBlockquote().run() },
-  { label: 'Code', icon: <Code2 size={15} />, active: (e: Editor) => e.isActive('codeBlock'), run: (e: Editor) => e.chain().focus().toggleCodeBlock().run() },
+  { label: 'Text', icon: <GoogleIcon name="notes" size={16} />, active: (e: Editor) => e.isActive('paragraph'), run: (e: Editor) => e.chain().focus().setParagraph().run() },
+  { label: 'Heading 1', icon: <GoogleIcon name="format_h1" size={16} />, active: (e: Editor) => e.isActive('heading', { level: 1 }), run: (e: Editor) => e.chain().focus().setHeading({ level: 1 }).run() },
+  { label: 'Heading 2', icon: <GoogleIcon name="format_h2" size={16} />, active: (e: Editor) => e.isActive('heading', { level: 2 }), run: (e: Editor) => e.chain().focus().setHeading({ level: 2 }).run() },
+  { label: 'Heading 3', icon: <GoogleIcon name="format_h3" size={16} />, active: (e: Editor) => e.isActive('heading', { level: 3 }), run: (e: Editor) => e.chain().focus().setHeading({ level: 3 }).run() },
+  { label: 'Bulleted list', icon: <GoogleIcon name="format_list_bulleted" size={16} />, active: (e: Editor) => e.isActive('bulletList'), run: (e: Editor) => e.chain().focus().toggleBulletList().run() },
+  { label: 'Numbered list', icon: <GoogleIcon name="format_list_numbered" size={16} />, active: (e: Editor) => e.isActive('orderedList'), run: (e: Editor) => e.chain().focus().toggleOrderedList().run() },
+  { label: 'To-do list', icon: <GoogleIcon name="check_box" size={16} />, active: (e: Editor) => e.isActive('taskList'), run: (e: Editor) => e.chain().focus().toggleTaskList().run() },
+  { label: 'Callout', icon: <GoogleIcon name="lightbulb" size={16} />, active: (e: Editor) => e.isActive('callout'), run: (e: Editor) => e.chain().focus().toggleCallout().run() },
+  { label: 'Quote', icon: <GoogleIcon name="format_quote" size={16} />, active: (e: Editor) => e.isActive('blockquote'), run: (e: Editor) => e.chain().focus().toggleBlockquote().run() },
+  { label: 'Code', icon: <GoogleIcon name="code" size={16} />, active: (e: Editor) => e.isActive('codeBlock'), run: (e: Editor) => e.chain().focus().toggleCodeBlock().run() },
 ]
 
 export function TurnInto({ editor, onDone }: { editor: Editor; onDone?: () => void }) {
@@ -200,7 +197,7 @@ export function BubbleDropdown({ label, title, children }: { label: React.ReactN
     <div className="bubble-dd" ref={root}>
       <button type="button" className={`tool bubble-dd-trigger ${open ? 'active' : ''}`} onMouseDown={keep} onClick={() => setOpen(v => !v)} title={title} aria-label={title} aria-expanded={open}>
         {label}
-        <ChevronDown size={12} />
+        <GoogleIcon name="arrow_drop_down" size={15} />
       </button>
       {open && <div className="bubble-dd-panel">{children(() => setOpen(false))}</div>}
     </div>

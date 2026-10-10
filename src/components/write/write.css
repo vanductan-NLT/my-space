@@ -156,7 +156,9 @@
 }
 
 .document-row:hover .doc-actions,
-.document-row:focus-within .doc-actions {
+.document-row:focus-within .doc-actions,
+.folder-row:hover .doc-actions,
+.folder-row:focus-within .doc-actions {
   opacity: 1;
 }
 
@@ -1399,41 +1401,69 @@
   margin-right: 6px;
   color: var(--mint);
   vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .doc-icon {
-  margin-right: 6px;
-  font-size: 13px;
+  margin-right: 8px;
+  color: var(--muted);
   vertical-align: middle;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
 }
 
-/* Notion Page Header Elements */
+.document-row:hover .doc-icon,
+.document-row.active .doc-icon {
+  color: var(--mint);
+}
+
+.folder-chevron {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.folder-chevron.open {
+  transform: rotate(90deg);
+}
+
+.folder-icon {
+  color: var(--mint);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+/* Modern Document Breadcrumb */
 .doc-breadcrumb {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .breadcrumb-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 6px;
-  border-radius: 5px;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
   cursor: pointer;
   background: transparent;
   border: 0;
   color: var(--secondary);
-  transition: background 0.12s ease;
+  transition: all 0.15s ease;
   font-size: inherit;
 }
 
 .breadcrumb-btn:hover {
   background: var(--surface-hi);
   color: var(--text);
+}
+
+.breadcrumb-folder-icon {
+  color: var(--mint);
 }
 
 .breadcrumb-sep {
@@ -1447,187 +1477,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 260px;
-}
-
-.page-header-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  position: relative;
-}
-
-.page-icon-trigger {
-  background: none;
-  border: 0;
-  font-size: 30px;
-  line-height: 1;
-  padding: 4px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: transform 0.12s ease, background 0.12s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.page-icon-trigger:hover {
-  background: var(--surface-hi);
-  transform: scale(1.1);
-}
-
-.add-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 0;
-  font-size: 12px;
-  color: var(--muted);
-  padding: 4px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  opacity: 0.8;
-  transition: all 0.12s ease;
-}
-
-.add-icon-btn:hover {
-  opacity: 1;
-  background: var(--surface-hi);
-  color: var(--text);
-}
-
-/* Emoji Picker Popover */
-.emoji-picker-popover {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 120;
-  padding: 10px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  width: 250px;
-}
-
-.emoji-picker-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  margin-bottom: 8px;
-}
-
-.emoji-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.emoji-btn {
-  height: 32px;
-  font-size: 18px;
-  display: grid;
-  place-content: center;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.1s ease;
-}
-
-.emoji-btn:hover {
-  background: var(--surface-hi);
-}
-
-.emoji-btn.active {
-  background: var(--mint-soft);
-  outline: 1.5px solid var(--mint);
-}
-
-.emoji-remove-btn {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  font-size: 11.5px;
-  color: var(--danger);
-  padding: 5px;
-  border-radius: 6px;
-  cursor: pointer;
-  text-align: center;
-}
-
-.emoji-remove-btn:hover {
-  background: var(--danger-soft);
-}
-
-/* Notion Project Note Templates Helper */
-.templates-container {
-  margin: 16px 0 28px;
-  padding: 16px 18px;
-  background: var(--surface-hi);
-  border: 1px dashed var(--border-strong);
-  border-radius: 12px;
-}
-
-.templates-header {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.templates-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-}
-
-.template-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.template-card:hover {
-  border-color: var(--mint);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-}
-
-.template-icon {
-  font-size: 22px;
-  flex: none;
-  line-height: 1;
-}
-
-.template-info strong {
-  display: block;
-  font-size: 13px;
-  color: var(--text);
-  font-weight: 600;
-}
-
-.template-info small {
-  display: block;
-  font-size: 11.5px;
-  color: var(--muted);
-  margin-top: 2px;
+  max-width: 320px;
 }
 
 /* Modal Styling */
@@ -1646,7 +1496,7 @@
 
 .modal-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
@@ -1654,18 +1504,12 @@
   font: inherit;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .modal-input:focus {
   border-color: var(--mint);
   box-shadow: 0 0 0 2px var(--mint-soft);
-}
-
-.modal-emoji-row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 
 .move-modal-list {

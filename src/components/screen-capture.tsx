@@ -1,6 +1,6 @@
 'use client'
 
-import { ScreenShare } from 'lucide-react'
+import { GoogleIcon } from './google-icon'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/lib/i18n'
@@ -160,7 +160,7 @@ export function CaptureScreenButton({
   return (
     <>
       <button type="button" className={className} onClick={() => void capture()} title={t('Capture screen')} aria-label={t('Capture screen')}>
-        <ScreenShare size={withLabel ? 15 : 18} />
+        <GoogleIcon name="screenshot_monitor" size={withLabel ? 16 : 18} />
         {withLabel && <span>{t('Capture screen')}</span>}
       </button>
       {frame && (

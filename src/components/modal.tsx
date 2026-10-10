@@ -1,6 +1,6 @@
 'use client'
 
-import { X } from 'lucide-react'
+import { GoogleIcon } from './google-icon'
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/lib/i18n'
@@ -65,7 +65,7 @@ export function Modal({
         <div className="modal-header">
           <h3 id={titleId}>{title}</h3>
           <button type="button" className="icon-button" onClick={onClose} aria-label={t('Close')}>
-            <X size={18} />
+            <GoogleIcon name="close" size={18} />
           </button>
         </div>
         {children}

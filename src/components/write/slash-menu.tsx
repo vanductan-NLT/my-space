@@ -1,15 +1,13 @@
 'use client'
 
 import type { Editor } from '@tiptap/react'
-import {
-  CheckSquare, Code, Heading1, Heading2, Heading3, Image as ImageIcon, Lightbulb, List, ListOrdered, Minus, Quote, Table2, Type,
-} from 'lucide-react'
+import { GoogleIcon } from '../google-icon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/lib/i18n'
 
 /*
- * Notion-style block menu: type "/" at the start of a line or after a space,
+ * Block menu: type "/" at the start of a line or after a space,
  * keep typing to filter, ↑/↓ + Enter to pick, Esc to close.
  */
 
@@ -23,18 +21,18 @@ type Item = {
 }
 
 const ITEMS: Item[] = [
-  { category: 'Basic blocks', title: 'Text', hint: 'Plain paragraph', keywords: 'text paragraph plain p chu doan van', icon: <Type size={16} />, run: e => e.chain().focus().setParagraph().run() },
-  { category: 'Basic blocks', title: 'Heading 1', hint: 'Big section title', keywords: 'h1 heading title tieu de 1 lon', icon: <Heading1 size={16} />, run: e => e.chain().focus().setHeading({ level: 1 }).run() },
-  { category: 'Basic blocks', title: 'Heading 2', hint: 'Medium heading', keywords: 'h2 heading subtitle tieu de 2 vua', icon: <Heading2 size={16} />, run: e => e.chain().focus().setHeading({ level: 2 }).run() },
-  { category: 'Basic blocks', title: 'Heading 3', hint: 'Small heading', keywords: 'h3 heading tieu de 3 nho', icon: <Heading3 size={16} />, run: e => e.chain().focus().setHeading({ level: 3 }).run() },
-  { category: 'Basic blocks', title: 'To-do list', hint: 'Checkboxes for tasks', keywords: 'todo task check checkbox danh sach viec cong viec do an', icon: <CheckSquare size={16} />, run: e => e.chain().focus().toggleTaskList().run() },
-  { category: 'Basic blocks', title: 'Bulleted list', hint: 'Simple bulleted list', keywords: 'bullet list ul unordered danh sach cham', icon: <List size={16} />, run: e => e.chain().focus().toggleBulletList().run() },
-  { category: 'Basic blocks', title: 'Numbered list', hint: '1, 2, 3 ordered list', keywords: 'number ordered list ol danh sach so', icon: <ListOrdered size={16} />, run: e => e.chain().focus().toggleOrderedList().run() },
-  { category: 'Basic blocks', title: 'Quote', hint: 'Call out a passage', keywords: 'quote blockquote citation trich dan', icon: <Quote size={16} />, run: e => e.chain().focus().toggleBlockquote().run() },
-  { category: 'Basic blocks', title: 'Divider', hint: 'Horizontal line', keywords: 'divider line hr separator duong ke', icon: <Minus size={16} />, run: e => e.chain().focus().setHorizontalRule().run() },
-  { category: 'Advanced & Projects', title: 'Callout', hint: 'Highlight note box or tip', keywords: 'callout note box hop ghi chu luu y tip warning alert do an', icon: <Lightbulb size={16} />, run: e => e.chain().focus().toggleCallout().run() },
-  { category: 'Advanced & Projects', title: 'Code', hint: 'Code snippet with syntax block', keywords: 'code snippet pre ma lap trinh', icon: <Code size={16} />, run: e => e.chain().focus().toggleCodeBlock().run() },
-  { category: 'Advanced & Projects', title: 'Table', hint: '3 × 3 spreadsheet table', keywords: 'table grid bang du lieu', icon: <Table2 size={16} />, run: e => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+  { category: 'Basic blocks', title: 'Text', hint: 'Plain paragraph', keywords: 'text paragraph plain p chu doan van', icon: <GoogleIcon name="notes" size={18} />, run: e => e.chain().focus().setParagraph().run() },
+  { category: 'Basic blocks', title: 'Heading 1', hint: 'Big section title', keywords: 'h1 heading title tieu de 1 lon', icon: <GoogleIcon name="format_h1" size={18} />, run: e => e.chain().focus().setHeading({ level: 1 }).run() },
+  { category: 'Basic blocks', title: 'Heading 2', hint: 'Medium heading', keywords: 'h2 heading subtitle tieu de 2 vua', icon: <GoogleIcon name="format_h2" size={18} />, run: e => e.chain().focus().setHeading({ level: 2 }).run() },
+  { category: 'Basic blocks', title: 'Heading 3', hint: 'Small heading', keywords: 'h3 heading tieu de 3 nho', icon: <GoogleIcon name="format_h3" size={18} />, run: e => e.chain().focus().setHeading({ level: 3 }).run() },
+  { category: 'Basic blocks', title: 'To-do list', hint: 'Checkboxes for tasks', keywords: 'todo task check checkbox danh sach viec cong viec', icon: <GoogleIcon name="check_box" size={18} />, run: e => e.chain().focus().toggleTaskList().run() },
+  { category: 'Basic blocks', title: 'Bulleted list', hint: 'Simple bulleted list', keywords: 'bullet list ul unordered danh sach cham', icon: <GoogleIcon name="format_list_bulleted" size={18} />, run: e => e.chain().focus().toggleBulletList().run() },
+  { category: 'Basic blocks', title: 'Numbered list', hint: '1, 2, 3 ordered list', keywords: 'number ordered list ol danh sach so', icon: <GoogleIcon name="format_list_numbered" size={18} />, run: e => e.chain().focus().toggleOrderedList().run() },
+  { category: 'Basic blocks', title: 'Quote', hint: 'Call out a passage', keywords: 'quote blockquote citation trich dan', icon: <GoogleIcon name="format_quote" size={18} />, run: e => e.chain().focus().toggleBlockquote().run() },
+  { category: 'Basic blocks', title: 'Divider', hint: 'Horizontal line', keywords: 'divider line hr separator duong ke', icon: <GoogleIcon name="horizontal_rule" size={18} />, run: e => e.chain().focus().setHorizontalRule().run() },
+  { category: 'Advanced blocks', title: 'Callout', hint: 'Highlight note box or tip', keywords: 'callout note box hop ghi chu luu y tip warning alert', icon: <GoogleIcon name="lightbulb" size={18} />, run: e => e.chain().focus().toggleCallout().run() },
+  { category: 'Advanced blocks', title: 'Code', hint: 'Code snippet with syntax block', keywords: 'code snippet pre ma lap trinh', icon: <GoogleIcon name="code" size={18} />, run: e => e.chain().focus().toggleCodeBlock().run() },
+  { category: 'Advanced blocks', title: 'Table', hint: '3 × 3 spreadsheet table', keywords: 'table grid bang du lieu', icon: <GoogleIcon name="table_chart" size={18} />, run: e => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
 ]
 
 type Open = { from: number; to: number; query: string; left: number; top: number; above: boolean }
@@ -48,7 +46,7 @@ export function SlashMenu({ editor, onPickImage }: { editor: Editor; onPickImage
 
   const items: Item[] = [
     ...ITEMS,
-    { category: 'Advanced & Projects', title: 'Image', hint: 'Upload or paste', keywords: 'image picture photo img upload hinh anh', icon: <ImageIcon size={16} />, run: () => onPickImage() },
+    { category: 'Advanced blocks', title: 'Image', hint: 'Upload or paste', keywords: 'image picture photo img upload hinh anh', icon: <GoogleIcon name="image" size={18} />, run: () => onPickImage() },
   ]
   const q = open?.query.toLowerCase() ?? ''
   // Matches the English name, the translated name and the keywords.

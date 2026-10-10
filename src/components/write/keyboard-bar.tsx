@@ -1,10 +1,7 @@
 'use client'
 
 import type { Editor } from '@tiptap/react'
-import {
-  Bold, CheckSquare, ChevronDown, Heading1, Heading2, Image as ImageIcon, Italic, Link2, List, ListOrdered, Redo2,
-  Strikethrough, Underline, Undo2,
-} from 'lucide-react'
+import { GoogleIcon } from '../google-icon'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '@/lib/i18n'
@@ -116,23 +113,23 @@ export function KeyboardBar({ editor, onOpenLink, onPickImage }: { editor: Edito
         <button type="button" className="kb-tool kb-slash" aria-label={t('Insert block')} onPointerDown={keepFocus} onMouseDown={keepFocus} onClick={() => c().insertContent('/').run()}>
           /
         </button>
-        {tool('Bold', <Bold size={18} />, () => c().toggleBold().run(), editor.isActive('bold'))}
-        {tool('Italic', <Italic size={18} />, () => c().toggleItalic().run(), editor.isActive('italic'))}
-        {tool('Underline', <Underline size={18} />, () => c().toggleUnderline().run(), editor.isActive('underline'))}
-        {tool('Strikethrough', <Strikethrough size={18} />, () => c().toggleStrike().run(), editor.isActive('strike'))}
+        {tool('Bold', <GoogleIcon name="format_bold" size={18} />, () => c().toggleBold().run(), editor.isActive('bold'))}
+        {tool('Italic', <GoogleIcon name="format_italic" size={18} />, () => c().toggleItalic().run(), editor.isActive('italic'))}
+        {tool('Underline', <GoogleIcon name="format_underlined" size={18} />, () => c().toggleUnderline().run(), editor.isActive('underline'))}
+        {tool('Strikethrough', <GoogleIcon name="strikethrough_s" size={18} />, () => c().toggleStrike().run(), editor.isActive('strike'))}
         <span className="kb-sep" />
-        {tool('Heading 1', <Heading1 size={18} />, () => c().toggleHeading({ level: 1 }).run(), editor.isActive('heading', { level: 1 }))}
-        {tool('Heading 2', <Heading2 size={18} />, () => c().toggleHeading({ level: 2 }).run(), editor.isActive('heading', { level: 2 }))}
-        {tool('Bulleted list', <List size={18} />, () => c().toggleBulletList().run(), editor.isActive('bulletList'))}
-        {tool('Numbered list', <ListOrdered size={18} />, () => c().toggleOrderedList().run(), editor.isActive('orderedList'))}
-        {tool('To-do list', <CheckSquare size={18} />, () => c().toggleTaskList().run(), editor.isActive('taskList'))}
+        {tool('Heading 1', <GoogleIcon name="format_h1" size={18} />, () => c().toggleHeading({ level: 1 }).run(), editor.isActive('heading', { level: 1 }))}
+        {tool('Heading 2', <GoogleIcon name="format_h2" size={18} />, () => c().toggleHeading({ level: 2 }).run(), editor.isActive('heading', { level: 2 }))}
+        {tool('Bulleted list', <GoogleIcon name="format_list_bulleted" size={18} />, () => c().toggleBulletList().run(), editor.isActive('bulletList'))}
+        {tool('Numbered list', <GoogleIcon name="format_list_numbered" size={18} />, () => c().toggleOrderedList().run(), editor.isActive('orderedList'))}
+        {tool('To-do list', <GoogleIcon name="check_box" size={18} />, () => c().toggleTaskList().run(), editor.isActive('taskList'))}
         <span className="kb-sep" />
-        {tool('Image', <ImageIcon size={18} />, onPickImage)}
-        {tool('Link', <Link2 size={18} />, onOpenLink, editor.isActive('link'))}
-        {tool('Undo', <Undo2 size={18} />, () => c().undo().run())}
-        {tool('Redo', <Redo2 size={18} />, () => c().redo().run())}
+        {tool('Image', <GoogleIcon name="image" size={18} />, onPickImage)}
+        {tool('Link', <GoogleIcon name="link" size={18} />, onOpenLink, editor.isActive('link'))}
+        {tool('Undo', <GoogleIcon name="undo" size={18} />, () => c().undo().run())}
+        {tool('Redo', <GoogleIcon name="redo" size={18} />, () => c().redo().run())}
       </div>
-      {tool('Done', <ChevronDown size={20} />, () => editor.commands.blur())}
+      {tool('Done', <GoogleIcon name="keyboard_hide" size={19} />, () => editor.commands.blur())}
     </div>,
     document.body
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { Focus, Maximize2, Minimize2 } from 'lucide-react'
+import { GoogleIcon } from './google-icon'
 import { createContext, useContext } from 'react'
 import { useI18n } from '@/lib/i18n'
 
@@ -24,7 +24,7 @@ export function useFullMode() {
 /** Shared full-mode trigger used by every workspace header. */
 export function FullModeButton({ kind = 'full' }: { kind?: FullModeKind }) {
   const { t } = useI18n()
-  const { active, enter, exit } = useFullMode()
+  const { enter } = useFullMode()
   const focus = kind === 'focus'
   const label = focus ? t('Focus mode') : t('Full mode')
 
@@ -36,7 +36,7 @@ export function FullModeButton({ kind = 'full' }: { kind?: FullModeKind }) {
       aria-label={label}
       title={`${focus ? t('Focus mode (full screen writing)') : t('Full mode (Esc to exit)')} (Ctrl/⌘+⇧+F)`}
     >
-      {focus ? <Focus size={18} /> : <Maximize2 size={18} />}
+      {focus ? <GoogleIcon name="center_focus_strong" size={18} /> : <GoogleIcon name="fullscreen" size={18} />}
     </button>
   )
 }
@@ -51,7 +51,7 @@ export function ExitFullModeButton() {
   const label = focus ? t('Exit focus mode') : t('Exit full mode')
   return (
     <button className="exit-full-mode-btn" onClick={exit} title={`${label} (Esc)`} aria-label={label}>
-      <Minimize2 size={16} />
+      <GoogleIcon name="fullscreen_exit" size={16} />
       <span>{focus ? t('Exit Focus') : t('Exit Full Mode')}</span>
       <kbd className="kbd-hint">Esc</kbd>
     </button>

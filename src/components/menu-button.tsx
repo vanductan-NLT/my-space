@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown } from 'lucide-react'
+import { GoogleIcon } from './google-icon'
 import { useEffect, useId, useRef, useState } from 'react'
 
 export type MenuItem =
@@ -71,7 +71,7 @@ export function MenuButton({ label, icon, items }: { label: string; icon?: React
       >
         {icon}
         <span className="menu-trigger-label">{label}</span>
-        <ChevronDown size={14} className="menu-chevron" />
+        <GoogleIcon name="arrow_drop_down" size={16} className="menu-chevron" />
       </button>
       {open && (
         <div className="menu-popover" role="menu" id={menuId} aria-label={label} onKeyDown={onKeyDown}>

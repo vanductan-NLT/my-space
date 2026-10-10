@@ -4,11 +4,7 @@ import { BubbleMenu, EditorContent, generateJSON, useEditor } from '@tiptap/reac
 import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
-import {
-  ChevronRight, Pin, PinOff, Edit2, CornerRightUp, Bold, Code, Columns2, Copy, Download, Italic, Link2, PanelLeftClose,
-  PanelLeftOpen, Plus, Printer, Rows, Search, Strikethrough, Trash2, Underline as UnderlineIcon, Unlink, Upload, X,
-  FolderPlus, Sparkles,
-} from 'lucide-react'
+import { GoogleIcon } from '../google-icon'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { db, exportBackup, importBackup, isQuotaError, parseBackup } from '@/lib/db'
 import { useAutosave } from '@/lib/use-autosave'
@@ -51,9 +47,6 @@ const mod = () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+')
 // Below this width the document list is an overlay, not a column.
 const isNarrow = () => window.matchMedia('(max-width: 700px)').matches
 
-const FOLDER_EMOJIS = ['📁', '🎓', '💻', '🔬', '📚', '🚀', '📝', '🎯', '⭐', '⚙️', '🧪', '💡']
-const DOC_EMOJIS = ['📄', '🎓', '💻', '🔬', '📝', '💡', '📊', '🚀', '📌', '🎯', '⚙️', '🧪', '📖', '📁', '☕', '✅', '⚠️', '💬']
-
 export default function WritingWorkspace() {
   const { t } = useI18n()
   // Untitled documents keep the default name in whatever language is shown.
@@ -61,8 +54,8 @@ export default function WritingWorkspace() {
   const [docs, setDocs] = useState<LocalDocument[]>([])
   const [folders, setFolders] = useState<LocalFolder[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
-  const [editingFolderTitle, setEditingFolderTitle] = useState('')
+  const [folderToRename, setFolderToRename] = useState<LocalFolder | null>(null)
+  const [renameFolderTitle, setRenameFolderTitle] = useState('')
   const [movingDocId, setMovingDocId] = useState<string | null>(null)
   const [activeId, setActiveId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -75,7 +68,6 @@ export default function WritingWorkspace() {
   // New folder dialog state
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
-  const [newFolderIcon, setNewFolderIcon] = useState('📁')
 
   // Safe delete folder state
   const [folderToDelete, setFolderToDelete] = useState<LocalFolder | null>(null)
@@ -84,9 +76,6 @@ export default function WritingWorkspace() {
   // Drag and drop feedback state
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [dragOverUncategorized, setDragOverUncategorized] = useState(false)
-
-  // Document page icon picker state
-  const [iconPickerOpen, setIconPickerOpen] = useState(false)
 
   // Link dialog state
   const [linkOpen, setLinkOpen] = useState(false)
@@ -139,7 +128,7 @@ export default function WritingWorkspace() {
   const refresh = useCallback(async (id?: string) => {
     const all = await db.documents.orderBy('updatedAt').reverse().toArray()
     const allFolders = await db.folders.toArray()
-    setFolders(allFolders.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+    setFolders(allFolders.sort((a, b) => (a.createdAt || a.updatedAt).localeCompare(b.createdAt || b.updatedAt)))
     setDocs(all.sort((a, b) => {
       if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
       return b.updatedAt.localeCompare(a.updatedAt)
@@ -166,7 +155,7 @@ export default function WritingWorkspace() {
         if (!all.length) {
           // Fixed id + put: seeding twice (StrictMode, two tabs) can't create duplicates.
           const tt = (key: string) => translate(key, undefined, detectLang())
-          const first = { ...newDocument(tt('Welcome to My Space'), '🎓'), id: 'welcome' }
+          const first = { ...newDocument(tt('Welcome to My Space')), id: 'welcome' }
           first.content = {
             type: 'doc',
             content: [
@@ -311,36 +300,33 @@ export default function WritingWorkspace() {
     await refresh(activeId)
   }
 
-  const updateDocIcon = async (icon: string) => {
-    if (!active) return
-    setDocs(v => v.map(d => (d.id === active.id ? { ...d, icon } : d)))
-    await db.documents.update(active.id, { icon, updatedAt: new Date().toISOString() })
-    setIconPickerOpen(false)
-  }
-
-  const renameFolder = async (id: string, newTitle: string) => {
-    if (newTitle.trim()) {
-      await db.folders.update(id, { title: newTitle.trim(), updatedAt: new Date().toISOString() })
-      await refresh(activeId)
-    }
-    setEditingFolderId(null)
+  const handleRenameFolder = async () => {
+    if (!folderToRename) return
+    const title = renameFolderTitle.trim()
+    if (!title) return
+    const folderId = folderToRename.id
+    setFolders(prev => prev.map(f => (f.id === folderId ? { ...f, title, updatedAt: new Date().toISOString() } : f)))
+    setFolderToRename(null)
+    setRenameFolderTitle('')
+    await db.folders.update(folderId, { title, updatedAt: new Date().toISOString() })
+    await refresh(activeId)
+    setNotice({ text: t('Renamed folder to "{title}"', { title }) })
   }
 
   const handleCreateFolder = async () => {
     const title = newFolderName.trim() || t('New folder')
-    const f = newFolder(title, newFolderIcon)
+    const f = newFolder(title)
     await db.folders.add(f)
     setExpandedFolders(prev => new Set(prev).add(f.id))
     setNewFolderOpen(false)
     setNewFolderName('')
-    setNewFolderIcon('📁')
     await refresh(activeId)
     setNotice({ text: t('Created folder "{title}"', { title: f.title }) })
   }
 
   const create = async (folderId?: string) => {
     await autosave.flush()
-    const d = { ...newDocument(t('Untitled document'), folderId ? '📝' : '📄'), folderId }
+    const d = { ...newDocument(t('Untitled document')), folderId }
     await db.documents.add(d)
     if (folderId) {
       setExpandedFolders(prev => new Set(prev).add(folderId))
@@ -408,111 +394,6 @@ export default function WritingWorkspace() {
     setNotice({ text: t('Deleted "{title}"', { title: f.title }) })
   }
 
-  const applyTemplate = (type: 'thesis' | 'progress' | 'meeting' | 'blank') => {
-    if (!editor || !active) return
-    if (type === 'blank') {
-      editor.commands.clearContent(true)
-      editor.commands.focus()
-      return
-    }
-
-    let html = ''
-    let newTitle = ''
-    let icon = '📄'
-
-    if (type === 'thesis') {
-      newTitle = t('Thesis / Project outline')
-      icon = '🎓'
-      html = `
-        <h1>${t('Thesis / Project outline')}</h1>
-        <div data-type="callout" data-icon="💡" class="notion-callout">
-          <span class="callout-icon" contenteditable="false">💡</span>
-          <div class="callout-body"><p>Lưu ý: Hạn nộp đề cương và báo cáo định kỳ theo hướng dẫn của Giảng viên.</p></div>
-        </div>
-        <h2>1. Tổng quan & Đặt vấn đề</h2>
-        <p>Mô tả ngắn gọn bối cảnh nghiên cứu, tính cấp thiết và bài toán thực tế cần giải quyết...</p>
-        <h2>2. Công nghệ & Kiến trúc dự kiến</h2>
-        <ul>
-          <li><p>Frontend / Ứng dụng: Next.js, React, Tailwind CSS...</p></li>
-          <li><p>Backend / API: Node.js, Python, PostgreSQL / Dexie...</p></li>
-          <li><p>Mô hình / Thuật toán: AI / Machine Learning, Cloud Services...</p></li>
-        </ul>
-        <h2>3. Kế hoạch các mốc tiến độ (Milestones)</h2>
-        <ul data-type="taskList">
-          <li data-type="taskItem" data-checked="false"><p>Thu thập tài liệu và khảo sát hiện trạng</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Thiết kế kiến trúc hệ thống và cơ sở dữ liệu</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Phát triển chức năng cốt lõi (Core features)</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Thử nghiệm, đánh giá kết quả và viết báo cáo</p></li>
-        </ul>
-        <h2>4. Bảng phân công & Dự kiến thời gian</h2>
-        <table>
-          <thead><tr><th><p>Giai đoạn</p></th><th><p>Nội dung</p></th><th><p>Hạn chót</p></th></tr></thead>
-          <tbody>
-            <tr><td><p>Sprint 1</p></td><td><p>Khảo sát & Thiết kế</p></td><td><p>Tuần 2</p></td></tr>
-            <tr><td><p>Sprint 2</p></td><td><p>Xây dựng nguyên mẫu (MVP)</p></td><td><p>Tuần 6</p></td></tr>
-            <tr><td><p>Sprint 3</p></td><td><p>Hoàn thiện & Báo cáo</p></td><td><p>Tuần 10</p></td></tr>
-          </tbody>
-        </table>
-        <p></p>
-      `
-    } else if (type === 'progress') {
-      newTitle = t('Weekly progress report')
-      icon = '📋'
-      html = `
-        <h1>${t('Weekly progress report')}</h1>
-        <div data-type="callout" data-icon="📌" class="notion-callout">
-          <span class="callout-icon" contenteditable="false">📌</span>
-          <div class="callout-body"><p>Tiến độ: Đúng kế hoạch 🟢 | Mục tiêu tuần này: Hoàn thiện module chính</p></div>
-        </div>
-        <h2>1. Công việc đã hoàn thành</h2>
-        <ul data-type="taskList">
-          <li data-type="taskItem" data-checked="true"><p>Hoàn thành tài liệu phân tích yêu cầu</p></li>
-          <li data-type="taskItem" data-checked="true"><p>Thiết kế luồng dữ liệu và sơ đồ lớp</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Code giao diện người dùng bước đầu</p></li>
-        </ul>
-        <h2>2. Vấn đề & Thách thức cần giải quyết</h2>
-        <blockquote><p>Ghi lại các lỗi (bugs), khó khăn kỹ thuật hoặc vấn đề cần tham vấn ý kiến GVHD tại đây...</p></blockquote>
-        <h2>3. Kế hoạch công việc tuần tới</h2>
-        <ul data-type="taskList">
-          <li data-type="taskItem" data-checked="false"><p>Tích hợp API và kiểm thử luồng chức năng</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Chuẩn bị slide báo cáo cho buổi họp tiếp theo</p></li>
-        </ul>
-        <p></p>
-      `
-    } else if (type === 'meeting') {
-      newTitle = t('Supervisor meeting notes')
-      icon = '👨‍🏫'
-      html = `
-        <h1>${t('Supervisor meeting notes')}</h1>
-        <div data-type="callout" data-icon="👨‍🏫" class="notion-callout">
-          <span class="callout-icon" contenteditable="false">👨‍🏫</span>
-          <div class="callout-body"><p>Thời gian: [Điền ngày/giờ] | GVHD: TS. / ThS. [Họ và tên]</p></div>
-        </div>
-        <h2>1. Nội dung đã báo cáo</h2>
-        <ul>
-          <li><p>Tóm tắt các kết quả đạt được từ buổi họp trước</p></li>
-          <li><p>Demo sản phẩm hoặc trình bày sơ đồ hệ thống</p></li>
-        </ul>
-        <h2>2. Nhận xét & Đóng góp ý kiến của Thầy/Cô</h2>
-        <blockquote><p>Ghi chú lại chính xác các góp ý, định hướng phương pháp và tài liệu GVHD gợi ý đọc thêm...</p></blockquote>
-        <h2>3. Các việc cần sửa đổi và hoàn thành (Action Items)</h2>
-        <ul data-type="taskList">
-          <li data-type="taskItem" data-checked="false"><p>Chỉnh sửa cấu trúc chương 2 theo góp ý của thầy/cô</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Bổ sung thêm biểu đồ so sánh hiệu năng</p></li>
-          <li data-type="taskItem" data-checked="false"><p>Gửi lại bản cập nhật trước [Ngày hẹn]</p></li>
-        </ul>
-        <p></p>
-      `
-    }
-
-    editor.commands.setContent(html)
-    if (active.title === t('Untitled document') || !active.title) {
-      updateTitle(newTitle)
-    }
-    void updateDocIcon(icon)
-    editor.commands.focus('start')
-  }
-
   const renderDocumentRow = (d: LocalDocument) => {
     const isActive = d.id === activeId
     return (
@@ -531,8 +412,8 @@ export default function WritingWorkspace() {
           aria-current={isActive ? 'true' : undefined}
         >
           <span className="doc-title">
-            {d.isPinned && <Pin size={12} className="pinned-icon" />}
-            <span className="doc-icon">{d.icon || '📄'}</span>
+            {d.isPinned && <GoogleIcon name="push_pin" size={13} fill className="pinned-icon" />}
+            <GoogleIcon name="description" size={16} className="doc-icon" />
             {titleOf(d.title)}
           </span>
           <span className="doc-meta">
@@ -550,7 +431,7 @@ export default function WritingWorkspace() {
               setMovingDocId(d.id)
             }}
           >
-            <CornerRightUp size={14} />
+            <GoogleIcon name="drive_file_move" size={15} />
           </button>
           <button
             type="button"
@@ -561,7 +442,7 @@ export default function WritingWorkspace() {
               void togglePin(d)
             }}
           >
-            {d.isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+            <GoogleIcon name="push_pin" size={15} fill={d.isPinned} />
           </button>
           <button
             type="button"
@@ -573,7 +454,7 @@ export default function WritingWorkspace() {
               void duplicate(d)
             }}
           >
-            <Copy size={14} />
+            <GoogleIcon name="content_copy" size={15} />
           </button>
           <button
             type="button"
@@ -585,7 +466,7 @@ export default function WritingWorkspace() {
               setDocToDelete(d)
             }}
           >
-            <Trash2 size={14} />
+            <GoogleIcon name="delete" size={15} />
           </button>
         </div>
       </div>
@@ -724,22 +605,21 @@ export default function WritingWorkspace() {
               className="new-btn"
               onClick={() => {
                 setNewFolderName('')
-                setNewFolderIcon('📁')
                 setNewFolderOpen(true)
               }}
               aria-label={t('New folder')}
               title={t('New folder')}
             >
-              <FolderPlus size={15} />
+              <GoogleIcon name="create_new_folder" size={17} />
             </button>
             <button type="button" className="new-btn" onClick={() => create(undefined)} aria-label={t('New document')}>
-              <Plus size={15} /> {t('New')}
+              <GoogleIcon name="add" size={17} /> {t('New')}
             </button>
           </div>
         </div>
 
         <label className="search">
-          <Search size={16} />
+          <GoogleIcon name="search" size={17} className="search-icon" />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
@@ -789,36 +669,27 @@ export default function WritingWorkspace() {
                 }}
               >
                 <div className="folder-row">
-                  {editingFolderId === f.id ? (
-                    <input
-                      className="folder-rename-input"
-                      autoFocus
-                      value={editingFolderTitle}
-                      onChange={e => setEditingFolderTitle(e.target.value)}
-                      onBlur={() => void renameFolder(f.id, editingFolderTitle)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') void renameFolder(f.id, editingFolderTitle)
-                        if (e.key === 'Escape') setEditingFolderId(null)
-                      }}
-                      onClick={e => e.stopPropagation()}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="folder-toggle"
-                      onClick={() => {
-                        const next = new Set(expandedFolders)
-                        if (isExpanded) next.delete(f.id)
-                        else next.add(f.id)
-                        setExpandedFolders(next)
-                      }}
-                    >
-                      <ChevronRight size={14} className={`folder-chevron ${isExpanded ? 'open' : ''}`} />
-                      <span className="folder-icon">{f.icon || '📁'}</span>
-                      <span className="folder-title">{f.title}</span>
-                      <span className="folder-count">{folderDocs.length}</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="folder-toggle"
+                    onClick={() => {
+                      const next = new Set(expandedFolders)
+                      if (isExpanded) next.delete(f.id)
+                      else next.add(f.id)
+                      setExpandedFolders(next)
+                    }}
+                    onDoubleClick={e => {
+                      e.stopPropagation()
+                      setFolderToRename(f)
+                      setRenameFolderTitle(f.title)
+                    }}
+                    title={t('Click to expand, double-click to rename')}
+                  >
+                    <GoogleIcon name="chevron_right" size={16} className={`folder-chevron ${isExpanded ? 'open' : ''}`} />
+                    <GoogleIcon name={isExpanded ? 'folder_open' : 'folder'} size={18} className="folder-icon" />
+                    <span className="folder-title">{f.title}</span>
+                    <span className="folder-count">{folderDocs.length}</span>
+                  </button>
 
                   <div className="doc-actions">
                     <button
@@ -830,7 +701,7 @@ export default function WritingWorkspace() {
                         void create(f.id)
                       }}
                     >
-                      <Plus size={14} />
+                      <GoogleIcon name="add" size={15} />
                     </button>
                     <button
                       type="button"
@@ -838,11 +709,11 @@ export default function WritingWorkspace() {
                       title={t('Rename folder')}
                       onClick={e => {
                         e.stopPropagation()
-                        setEditingFolderTitle(f.title)
-                        setEditingFolderId(f.id)
+                        setFolderToRename(f)
+                        setRenameFolderTitle(f.title)
                       }}
                     >
-                      <Edit2 size={13} />
+                      <GoogleIcon name="edit" size={14} />
                     </button>
                     <button
                       type="button"
@@ -854,7 +725,7 @@ export default function WritingWorkspace() {
                         setDeleteWithDocs(false)
                       }}
                     >
-                      <Trash2 size={13} />
+                      <GoogleIcon name="delete" size={14} />
                     </button>
                   </div>
                 </div>
@@ -870,7 +741,7 @@ export default function WritingWorkspace() {
                           className="folder-add-quick-btn"
                           onClick={() => void create(f.id)}
                         >
-                          <Plus size={13} /> {t('Create a document')}
+                          <GoogleIcon name="add" size={13} /> {t('Create a document')}
                         </button>
                       </div>
                     )}
@@ -915,10 +786,10 @@ export default function WritingWorkspace() {
 
         <div className="docs-footer">
           <button className="button" onClick={() => fileRef.current?.click()}>
-            <Upload size={15} /> {t('Import')}
+            <GoogleIcon name="upload_file" size={16} /> {t('Import')}
           </button>
           <button className="button" onClick={() => void backup()}>
-            <Download size={15} /> {t('Backup')}
+            <GoogleIcon name="cloud_download" size={16} /> {t('Backup')}
           </button>
           <input
             ref={fileRef}
@@ -942,7 +813,7 @@ export default function WritingWorkspace() {
             aria-label={t(sidebar ? 'Hide documents sidebar' : 'Show documents sidebar')}
             title={t(sidebar ? 'Hide sidebar' : 'Show sidebar')}
           >
-            {sidebar ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}
+            <GoogleIcon name={sidebar ? 'dock_to_left' : 'menu_open'} size={20} />
           </button>
 
           <SaveIndicator state={save} />
@@ -950,13 +821,13 @@ export default function WritingWorkspace() {
           <div className="header-actions">
             <MenuButton
               label={t('Export')}
-              icon={<Download size={15} />}
+              icon={<GoogleIcon name="download" size={16} />}
               items={[
                 { label: 'Markdown', hint: '.md', onSelect: () => exportActive('md') },
                 { label: t('Plain text'), hint: '.txt', onSelect: () => exportActive('txt') },
                 { label: t('Web page'), hint: '.html', onSelect: () => exportActive('html') },
                 'separator',
-                { label: t('Print or save as PDF'), icon: <Printer size={15} />, onSelect: () => window.print() },
+                { label: t('Print or save as PDF'), icon: <GoogleIcon name="print" size={16} />, onSelect: () => window.print() },
               ]}
             />
 
@@ -1003,7 +874,7 @@ export default function WritingWorkspace() {
               className={`page ${fontFamily(active.font) ? 'has-font' : ''}`}
               style={{ '--doc-font': fontFamily(active.font) ?? undefined } as React.CSSProperties}
             >
-              {/* Notion-style Breadcrumb */}
+              {/* Clean Modern Breadcrumb */}
               <div className="doc-breadcrumb">
                 <button
                   type="button"
@@ -1011,50 +882,11 @@ export default function WritingWorkspace() {
                   onClick={() => setMovingDocId(active.id)}
                   title={t('Move to folder')}
                 >
-                  <span>{activeFolder ? activeFolder.icon || '📁' : '📁'}</span>
-                  <span>{activeFolder ? activeFolder.title : t('Uncategorized')}</span>
+                  <GoogleIcon name="folder" size={15} className="breadcrumb-folder-icon" />
+                  <span>{activeFolder ? activeFolder.title : t('All documents')}</span>
                 </button>
                 <span className="breadcrumb-sep">/</span>
                 <span className="breadcrumb-current">{titleOf(active.title)}</span>
-              </div>
-
-              {/* Notion Page Icon Selector */}
-              <div className="page-header-row">
-                <button
-                  type="button"
-                  className="page-icon-trigger"
-                  onClick={() => setIconPickerOpen(v => !v)}
-                  title={active.icon ? t('Change icon') : t('Add page icon')}
-                >
-                  {active.icon || '📄'}
-                </button>
-
-                {iconPickerOpen && (
-                  <div className="emoji-picker-popover" onClick={e => e.stopPropagation()}>
-                    <div className="emoji-picker-title">{t('Folder icon')}</div>
-                    <div className="emoji-grid">
-                      {DOC_EMOJIS.map(emo => (
-                        <button
-                          key={emo}
-                          type="button"
-                          className={`emoji-btn ${active.icon === emo ? 'active' : ''}`}
-                          onClick={() => void updateDocIcon(emo)}
-                        >
-                          {emo}
-                        </button>
-                      ))}
-                    </div>
-                    {active.icon && (
-                      <button
-                        type="button"
-                        className="emoji-remove-btn"
-                        onClick={() => void updateDocIcon('📄')}
-                      >
-                        {t('Remove icon')}
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
 
               <input
@@ -1073,64 +905,9 @@ export default function WritingWorkspace() {
                 placeholder={t('Untitled document')}
               />
 
-              {/* Notion Project Templates when note is empty */}
-              {editor && plainText(active.content).trim() === '' && (
-                <div className="templates-container">
-                  <div className="templates-header">
-                    <Sparkles size={14} /> {t('Use a project template')}
-                  </div>
-                  <div className="templates-grid">
-                    <button
-                      type="button"
-                      className="template-card"
-                      onClick={() => applyTemplate('thesis')}
-                    >
-                      <span className="template-icon">🎓</span>
-                      <div className="template-info">
-                        <strong>{t('Thesis / Project outline')}</strong>
-                        <small>Mục tiêu, công nghệ & các mốc tiến độ</small>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className="template-card"
-                      onClick={() => applyTemplate('progress')}
-                    >
-                      <span className="template-icon">📋</span>
-                      <div className="template-info">
-                        <strong>{t('Weekly progress report')}</strong>
-                        <small>Checklist việc đã làm & kế hoạch tuần</small>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className="template-card"
-                      onClick={() => applyTemplate('meeting')}
-                    >
-                      <span className="template-icon">👨‍🏫</span>
-                      <div className="template-info">
-                        <strong>{t('Supervisor meeting notes')}</strong>
-                        <small>Báo cáo nội dung & góp ý của GVHD</small>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className="template-card"
-                      onClick={() => applyTemplate('blank')}
-                    >
-                      <span className="template-icon">📝</span>
-                      <div className="template-info">
-                        <strong>{t('Blank note')}</strong>
-                        <small>Bắt đầu viết từ trang trắng</small>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {editor && (
                 <>
-                  {/* Select text → formatting, like Notion. */}
+                  {/* Select text → formatting bubble */}
                   <BubbleMenu
                     editor={editor}
                     pluginKey="formatBubble"
@@ -1143,12 +920,12 @@ export default function WritingWorkspace() {
                       {close => <TurnInto editor={editor} onDone={close} />}
                     </BubbleDropdown>
                     <span className="separator" />
-                    <Tool label={t('Bold')} shortcut="B" active={editor.isActive('bold')} click={() => editor.chain().focus().toggleBold().run()} icon={<Bold />} />
-                    <Tool label={t('Italic')} shortcut="I" active={editor.isActive('italic')} click={() => editor.chain().focus().toggleItalic().run()} icon={<Italic />} />
-                    <Tool label={t('Underline')} shortcut="U" active={editor.isActive('underline')} click={() => editor.chain().focus().toggleUnderline().run()} icon={<UnderlineIcon />} />
-                    <Tool label={t('Strikethrough')} active={editor.isActive('strike')} click={() => editor.chain().focus().toggleStrike().run()} icon={<Strikethrough />} />
-                    <Tool label={t('Inline code')} active={editor.isActive('code')} click={() => editor.chain().focus().toggleCode().run()} icon={<Code />} />
-                    <Tool label={t('Link')} shortcut="K" active={editor.isActive('link')} click={openLinkDialog} icon={<Link2 />} />
+                    <Tool label={t('Bold')} shortcut="B" active={editor.isActive('bold')} click={() => editor.chain().focus().toggleBold().run()} icon={<GoogleIcon name="format_bold" size={17} />} />
+                    <Tool label={t('Italic')} shortcut="I" active={editor.isActive('italic')} click={() => editor.chain().focus().toggleItalic().run()} icon={<GoogleIcon name="format_italic" size={17} />} />
+                    <Tool label={t('Underline')} shortcut="U" active={editor.isActive('underline')} click={() => editor.chain().focus().toggleUnderline().run()} icon={<GoogleIcon name="format_underlined" size={17} />} />
+                    <Tool label={t('Strikethrough')} active={editor.isActive('strike')} click={() => editor.chain().focus().toggleStrike().run()} icon={<GoogleIcon name="strikethrough_s" size={17} />} />
+                    <Tool label={t('Inline code')} active={editor.isActive('code')} click={() => editor.chain().focus().toggleCode().run()} icon={<GoogleIcon name="code" size={17} />} />
+                    <Tool label={t('Link')} shortcut="K" active={editor.isActive('link')} click={openLinkDialog} icon={<GoogleIcon name="link" size={17} />} />
                     <span className="separator" />
                     <BubbleDropdown
                       label={
@@ -1184,12 +961,12 @@ export default function WritingWorkspace() {
                     shouldShow={({ state }) => state.selection.empty && editor.isActive('table')}
                     tippyOptions={{ placement: 'top-start' }}
                   >
-                    <Tool label={t('Add row below')} click={() => editor.chain().focus().addRowAfter().run()} icon={<Rows />} />
-                    <Tool label={t('Add column right')} click={() => editor.chain().focus().addColumnAfter().run()} icon={<Plus />} />
-                    <Tool label={t('Delete row')} click={() => editor.chain().focus().deleteRow().run()} icon={<Trash2 />} />
-                    <Tool label={t('Delete column')} click={() => editor.chain().focus().deleteColumn().run()} icon={<Columns2 />} />
+                    <Tool label={t('Add row below')} click={() => editor.chain().focus().addRowAfter().run()} icon={<GoogleIcon name="table_rows" size={17} />} />
+                    <Tool label={t('Add column right')} click={() => editor.chain().focus().addColumnAfter().run()} icon={<GoogleIcon name="view_column" size={17} />} />
+                    <Tool label={t('Delete row')} click={() => editor.chain().focus().deleteRow().run()} icon={<GoogleIcon name="delete" size={17} />} />
+                    <Tool label={t('Delete column')} click={() => editor.chain().focus().deleteColumn().run()} icon={<GoogleIcon name="delete" size={17} />} />
                     <span className="separator" />
-                    <Tool label={t('Delete table')} click={() => editor.chain().focus().deleteTable().run()} icon={<X />} />
+                    <Tool label={t('Delete table')} click={() => editor.chain().focus().deleteTable().run()} icon={<GoogleIcon name="close" size={17} />} />
                   </BubbleMenu>
 
                   <SlashMenu editor={editor} onPickImage={() => imageFileRef.current?.click()} />
@@ -1223,7 +1000,7 @@ export default function WritingWorkspace() {
             <input
               className="modal-input"
               autoFocus
-              placeholder="e.g. Đồ án tốt nghiệp 2026, Nghiên cứu AI..."
+              placeholder="e.g. Work, Notes, Research..."
               value={newFolderName}
               onChange={e => setNewFolderName(e.target.value)}
               onKeyDown={e => {
@@ -1232,28 +1009,49 @@ export default function WritingWorkspace() {
             />
           </div>
 
-          <div className="modal-form-group">
-            <label className="modal-label">{t('Folder icon')}</label>
-            <div className="modal-emoji-row">
-              {FOLDER_EMOJIS.map(emo => (
-                <button
-                  key={emo}
-                  type="button"
-                  className={`emoji-btn ${newFolderIcon === emo ? 'active' : ''}`}
-                  onClick={() => setNewFolderIcon(emo)}
-                >
-                  {emo}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="modal-footer">
             <button type="button" className="button" onClick={() => setNewFolderOpen(false)}>
               {t('Cancel')}
             </button>
             <button type="button" className="button primary" onClick={() => void handleCreateFolder()}>
               {t('Create folder')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Rename Folder Modal */}
+      {folderToRename && (
+        <Modal title={t('Rename folder')} onClose={() => setFolderToRename(null)}>
+          <div className="modal-form-group">
+            <label className="modal-label">{t('Folder name')}</label>
+            <input
+              className="modal-input"
+              autoFocus
+              value={renameFolderTitle}
+              onChange={e => setRenameFolderTitle(e.target.value)}
+              onFocus={e => e.target.select()}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  void handleRenameFolder()
+                }
+                if (e.key === 'Escape') setFolderToRename(null)
+              }}
+            />
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="button" onClick={() => setFolderToRename(null)}>
+              {t('Cancel')}
+            </button>
+            <button
+              type="button"
+              className="button primary"
+              disabled={!renameFolderTitle.trim()}
+              onClick={() => void handleRenameFolder()}
+            >
+              {t('Save')}
             </button>
           </div>
         </Modal>
@@ -1328,7 +1126,7 @@ export default function WritingWorkspace() {
           <div className="modal-footer">
             {editor?.isActive('link') && (
               <button type="button" className="button danger" onClick={removeLink}>
-                <Unlink size={15} /> {t('Remove')}
+                <GoogleIcon name="link_off" size={16} /> {t('Remove')}
               </button>
             )}
             <button type="button" className="button" onClick={() => setLinkOpen(false)}>
@@ -1353,7 +1151,7 @@ export default function WritingWorkspace() {
                 setMovingDocId(null)
               }}
             >
-              <span>📁</span> {t('Uncategorized')}
+              <GoogleIcon name="folder_open" size={18} /> {t('Uncategorized')}
             </button>
             {folders.map(f => (
               <button
@@ -1366,7 +1164,7 @@ export default function WritingWorkspace() {
                   setMovingDocId(null)
                 }}
               >
-                <span>{f.icon || '📁'}</span> {f.title}
+                <GoogleIcon name="folder" size={18} /> {f.title}
               </button>
             ))}
           </div>
@@ -1395,7 +1193,7 @@ export default function WritingWorkspace() {
         <div className={`toast ${notice.error ? 'error' : ''}`} role="status">
           <span>{notice.text}</span>
           <button className="icon-button" onClick={() => setNotice(null)} aria-label={t('Dismiss notification')}>
-            <X size={16} />
+            <GoogleIcon name="close" size={16} />
           </button>
           {notice.offerExport && (
             <button className="button" onClick={() => void backup()}>
@@ -1434,3 +1232,4 @@ function Tool({
     </button>
   )
 }
+

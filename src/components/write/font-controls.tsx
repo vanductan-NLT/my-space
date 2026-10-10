@@ -1,7 +1,7 @@
 'use client'
 
 import type { Editor } from '@tiptap/react'
-import { Check, Type } from 'lucide-react'
+import { GoogleIcon } from '../google-icon'
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/lib/i18n'
 import { FONTS } from './fonts'
@@ -29,7 +29,7 @@ export function PageFontButton({ font, onChange }: { font: string; onChange: (id
   return (
     <div className="menu-root" ref={root}>
       <button type="button" className="icon-button" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="true" title={t('Page font')} aria-label={t('Page font')}>
-        <Type size={18} />
+        <GoogleIcon name="text_fields" size={18} />
       </button>
       {open && (
         <div className="menu-popover font-popover" role="group" aria-label={t('Page font')}>
@@ -51,7 +51,7 @@ export function PageFontButton({ font, onChange }: { font: string; onChange: (id
                 </span>
                 <span className="font-name">{f.id === 'default' ? t('Default') : f.name}</span>
                 <small>{t(f.kind)}</small>
-                {font === f.id && <Check size={14} className="font-check" />}
+                {font === f.id && <GoogleIcon name="check" size={14} className="font-check" />}
               </button>
             ))}
           </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import type { Editor } from '@tiptap/react'
-import { Mic, Square } from 'lucide-react'
+import { GoogleIcon } from '../google-icon'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { detectLang, useI18n } from '@/lib/i18n'
@@ -135,7 +135,7 @@ export function Dictation({ editor, onError }: { editor: Editor | null; onError:
         aria-label={t(listening ? 'Stop voice typing' : 'Voice typing')}
         title={t("Voice typing — your browser's speech service turns speech into text (online)")}
       >
-        <Mic size={18} />
+        <GoogleIcon name="mic" size={18} />
       </button>
 
       {listening &&
@@ -147,7 +147,7 @@ export function Dictation({ editor, onError }: { editor: Editor | null; onError:
               {lang === 'vi-VN' ? 'VI' : 'EN'}
             </button>
             <button type="button" className="dictation-stop" onClick={stop} aria-label={t('Stop voice typing')}>
-              <Square size={12} fill="currentColor" /> {t('Stop')}
+              <GoogleIcon name="stop" size={14} fill /> {t('Stop')}
             </button>
           </div>,
           document.body
