@@ -179,6 +179,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
             <div className="shortcut-row"><span>{t('Settings')}</span><kbd>{modKey},</kbd></div>
             <div className="shortcut-row"><span>{t('Toggle full mode')}</span><kbd>{modKey}⇧F</kbd></div>
+            <div className="shortcut-row"><span>{t('Quick find a page')}</span><kbd>{modKey}P</kbd></div>
+            <div className="shortcut-row"><span>{t('Move block up / down')}</span><kbd>Alt⇧↑↓</kbd></div>
             <div className="shortcut-row"><span>{t('Show keyboard shortcuts')}</span><kbd>?</kbd></div>
             <div className="shortcut-row"><span>{t('Exit full mode or close dialog')}</span><kbd>Esc</kbd></div>
           </div>

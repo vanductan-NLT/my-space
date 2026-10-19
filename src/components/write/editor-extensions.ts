@@ -19,6 +19,8 @@ import { getLang, translate } from '@/lib/i18n'
 import { FontSize } from './font-size'
 import { ImageNode } from './image-node'
 import { CalloutNode } from './callout-node'
+import { ToggleNode } from './toggle-node'
+import { BlockEditingBehaviors } from './block-editing-behaviors'
 
 /** The shared schema used for editing, rich clipboard paste and HTML import. */
 export const writeExtensions = [
@@ -43,6 +45,8 @@ export const writeExtensions = [
   TableCell,
   ImageNode,
   CalloutNode,
+  ToggleNode,
+  BlockEditingBehaviors,
   TextStyle,
   Color,
   Highlight.configure({ multicolor: true }),

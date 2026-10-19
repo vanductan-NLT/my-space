@@ -21,10 +21,15 @@ import { NodeSelection } from '@tiptap/pm/state'
 import { Modal } from '../modal'
 import { SaveIndicator } from '../save-indicator'
 import { MenuButton } from '../menu-button'
+import { DocumentSidebar } from './document-sidebar'
+import { QuickFindPalette } from './quick-find-palette'
+import { TrashDialog, TRASH_RETENTION_DAYS } from './trash-dialog'
+import { PageIconPicker } from './page-icon-picker'
+import { BlockHandle } from './block-handle'
 import { EMPTY_CONTENT, newDocument, newFolder, type LocalDocument, type LocalFolder, type SaveState } from '@/lib/models'
-import { timeAgo } from '@/lib/time'
 import { detectLang, getLang, rich, translate, useI18n } from '@/lib/i18n'
 import './write.css'
+import './notion-features.css'
 import { FullModeButton, useFullMode } from '../full-mode'
 
 const download = (name: string, text: string, type = 'application/json') => {
@@ -52,6 +57,11 @@ export default function WritingWorkspace() {
   // Untitled documents keep the default name in whatever language is shown.
   const titleOf = (title: string) => (!title || title === 'Untitled document' || title === 'Tài liệu chưa đặt tên' ? t('Untitled document') : title)
   const [docs, setDocs] = useState<LocalDocument[]>([])
+  // Documents with `deletedAt`, kept apart so every list and search ignores them.
+  const [trash, setTrash] = useState<LocalDocument[]>([])
+  const [trashOpen, setTrashOpen] = useState(false)
+  const [quickFindOpen, setQuickFindOpen] = useState(false)
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [folders, setFolders] = useState<LocalFolder[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [folderToRename, setFolderToRename] = useState<LocalFolder | null>(null)
@@ -62,8 +72,7 @@ export default function WritingWorkspace() {
   const [save, setSave] = useState<SaveState>('idle')
   const [sidebar, setSidebar] = useState(true)
   const { active: focus } = useFullMode()
-  const [query, setQuery] = useState('')
-  const [notice, setNotice] = useState<{ text: string; error?: boolean; offerExport?: boolean } | null>(null)
+  const [notice, setNotice] = useState<{ text: string; error?: boolean; offerExport?: boolean; action?: { label: string; run: () => void } } | null>(null)
 
   // New folder dialog state
   const [newFolderOpen, setNewFolderOpen] = useState(false)
@@ -73,35 +82,28 @@ export default function WritingWorkspace() {
   const [folderToDelete, setFolderToDelete] = useState<LocalFolder | null>(null)
   const [deleteWithDocs, setDeleteWithDocs] = useState(false)
 
-  // Drag and drop feedback state
-  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
-  const [dragOverUncategorized, setDragOverUncategorized] = useState(false)
-
   // Link dialog state
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
-
-  // Delete modal state
-  const [docToDelete, setDocToDelete] = useState<LocalDocument | null>(null)
 
   // Bumped when the active document is replaced from outside the editor (e.g. backup import).
   const [contentVersion, setContentVersion] = useState(0)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const imageFileRef = useRef<HTMLInputElement>(null)
-  const titleRef = useRef<HTMLInputElement>(null)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const focusTitleNext = useRef(false)
 
   // Confirmations fade on their own; errors stay until dismissed.
   useEffect(() => {
     if (!notice || notice.error) return
-    const t = setTimeout(() => setNotice(null), 4000)
+    const t = setTimeout(() => setNotice(null), notice.action ? 7000 : 4000)
     return () => clearTimeout(t)
   }, [notice])
   const active = docs.find(d => d.id === activeId)
   const activeFolder = active?.folderId ? folders.find(f => f.id === active.folderId) : undefined
 
-  const autosave = useAutosave<Partial<Pick<LocalDocument, 'title' | 'content' | 'font' | 'icon'>>>({
+  const autosave = useAutosave<Partial<Pick<LocalDocument, 'title' | 'content' | 'font' | 'icon' | 'fullWidth'>>>({
     delay: 650,
     write: async (id, patch) => {
       const title = patch.title === undefined ? {} : { title: patch.title.trim() || t('Untitled document') }
@@ -126,17 +128,14 @@ export default function WritingWorkspace() {
   })
 
   const refresh = useCallback(async (id?: string) => {
-    const all = await db.documents.orderBy('updatedAt').reverse().toArray()
+    const stored = await db.documents.orderBy('updatedAt').reverse().toArray()
+    const all = stored.filter(d => !d.deletedAt)
     const allFolders = await db.folders.toArray()
     setFolders(allFolders.sort((a, b) => (a.createdAt || a.updatedAt).localeCompare(b.createdAt || b.updatedAt)))
-    setDocs(all.sort((a, b) => {
-      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1
-      return b.updatedAt.localeCompare(a.updatedAt)
-    }))
+    setDocs(all)
+    setTrash(stored.filter(d => d.deletedAt))
     const wanted = id || localStorage.getItem('my-space:last-document') || all[0]?.id
-    if (wanted) {
-      setActiveId(all.some(d => d.id === wanted) ? wanted : all[0]?.id)
-    }
+    setActiveId(wanted && all.some(d => d.id === wanted) ? wanted : (all[0]?.id ?? ''))
   }, [])
 
   useEffect(() => {
@@ -149,6 +148,10 @@ export default function WritingWorkspace() {
 
     void (async () => {
       try {
+        // Pages that sat in Trash longer than the retention window are removed for good.
+        const cutoff = Date.now() - TRASH_RETENTION_DAYS * 86400000
+        const expired = (await db.documents.toArray()).filter(d => d.deletedAt && Date.parse(d.deletedAt) < cutoff)
+        if (expired.length) await db.documents.bulkDelete(expired.map(d => d.id))
         let all = await db.documents.toArray()
         const allFolders = await db.folders.toArray()
         setFolders(allFolders.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
@@ -263,6 +266,13 @@ export default function WritingWorkspace() {
   }, [])
 
   useEffect(() => {
+    const el = titleRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [active?.title, active?.id, active?.fullWidth, editor])
+
+  useEffect(() => {
     if (!focusTitleNext.current || !editor) return
     focusTitleNext.current = false
     titleRef.current?.focus()
@@ -286,9 +296,14 @@ export default function WritingWorkspace() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const command = e.metaKey || e.ctrlKey
+      if (command && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         openLinkDialog()
+      } else if (command && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') {
+        // Quick Find replaces the browser's print shortcut here; printing stays in the page menu.
+        e.preventDefault()
+        setQuickFindOpen(true)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -324,17 +339,54 @@ export default function WritingWorkspace() {
     setNotice({ text: t('Created folder "{title}"', { title: f.title }) })
   }
 
-  const create = async (folderId?: string) => {
+  const create = async (folderId?: string, title?: string) => {
     await autosave.flush()
-    const d = { ...newDocument(t('Untitled document')), folderId }
+    const d = { ...newDocument(title || t('Untitled document')), folderId }
     await db.documents.add(d)
     if (folderId) {
       setExpandedFolders(prev => new Set(prev).add(folderId))
     }
-    setQuery('')
     if (isNarrow()) setSidebar(false)
-    focusTitleNext.current = true
+    focusTitleNext.current = !title
     await refresh(d.id)
+  }
+
+  const patchActive = (patch: Partial<Pick<LocalDocument, 'icon' | 'fullWidth'>>) => {
+    if (!active) return
+    setDocs(v => v.map(d => (d.id === active.id ? { ...d, ...patch } : d)))
+    autosave.queue(active.id, patch)
+  }
+
+  const moveToFolder = async (docId: string, folderId?: string) => {
+    await db.documents.update(docId, { folderId, updatedAt: new Date().toISOString() })
+    if (folderId) setExpandedFolders(prev => new Set(prev).add(folderId))
+    await refresh(activeId)
+    const doc = docs.find(d => d.id === docId)
+    const folder = folders.find(f => f.id === folderId)
+    if (doc) setNotice({ text: t('Moved "{title}" to "{folder}"', { title: titleOf(doc.title), folder: folder?.title ?? t('Pages') }) })
+  }
+
+  /** Soft delete: the page goes to Trash and can be restored (or undone right away). */
+  const moveToTrash = async (d: LocalDocument) => {
+    await autosave.flush()
+    await db.documents.update(d.id, { deletedAt: new Date().toISOString() })
+    const next = d.id === activeId ? docs.find(x => x.id !== d.id)?.id : activeId
+    await refresh(next)
+    setNotice({ text: t('Moved "{title}" to Trash', { title: titleOf(d.title) }), action: { label: t('Undo'), run: () => void restore(d, true) } })
+  }
+
+  const restore = async (d: LocalDocument, open = false) => {
+    // A page whose folder was deleted meanwhile comes back as a loose page.
+    const folderId = d.folderId && (await db.folders.get(d.folderId)) ? d.folderId : undefined
+    await db.documents.update(d.id, { deletedAt: undefined, folderId })
+    await refresh(open ? d.id : activeId || d.id)
+    if (!open) setNotice({ text: t('Restored "{title}"', { title: titleOf(d.title) }) })
+    else setNotice(null)
+  }
+
+  const deleteForever = async (ids: string[]) => {
+    await db.documents.bulkDelete(ids)
+    await refresh(activeId)
   }
 
   const updateTitle = (title: string) => {
@@ -357,29 +409,16 @@ export default function WritingWorkspace() {
     setNotice({ text: t('Duplicated "{title}"', { title: copy.title }) })
   }
 
-  const confirmDelete = async () => {
-    if (!docToDelete) return
-    const target = docToDelete
-    setDocToDelete(null)
-    await db.documents.delete(target.id)
-    let remaining = docs.filter(x => x.id !== target.id)
-    if (!remaining.length) {
-      const fresh = newDocument()
-      await db.documents.add(fresh)
-      remaining = [fresh]
-    }
-    await refresh(remaining[0].id)
-    setNotice({ text: t('Deleted "{title}"', { title: titleOf(target.title) }) })
-  }
-
   const handleSafeDeleteFolder = async () => {
     if (!folderToDelete) return
     const f = folderToDelete
     const docsInFolder = docs.filter(d => d.folderId === f.id)
 
     if (deleteWithDocs) {
+      // Notes go to Trash rather than vanishing, so a mis-click is recoverable.
+      const deletedAt = new Date().toISOString()
       for (const d of docsInFolder) {
-        await db.documents.delete(d.id)
+        await db.documents.update(d.id, { deletedAt })
       }
     } else {
       for (const d of docsInFolder) {
@@ -390,87 +429,8 @@ export default function WritingWorkspace() {
     await db.folders.delete(f.id)
     setFolderToDelete(null)
     setDeleteWithDocs(false)
-    await refresh(activeId)
+    await refresh(deleteWithDocs && docsInFolder.some(d => d.id === activeId) ? undefined : activeId)
     setNotice({ text: t('Deleted "{title}"', { title: f.title }) })
-  }
-
-  const renderDocumentRow = (d: LocalDocument) => {
-    const isActive = d.id === activeId
-    return (
-      <div
-        className={`document-row ${isActive ? 'active' : ''}`}
-        key={d.id}
-        draggable
-        onDragStart={e => {
-          e.dataTransfer.setData('text/plain', d.id)
-        }}
-      >
-        <button
-          type="button"
-          className="doc-select-btn"
-          onClick={() => selectDocument(d.id)}
-          aria-current={isActive ? 'true' : undefined}
-        >
-          <span className="doc-title">
-            {d.isPinned && <GoogleIcon name="push_pin" size={13} fill className="pinned-icon" />}
-            <GoogleIcon name="description" size={16} className="doc-icon" />
-            {titleOf(d.title)}
-          </span>
-          <span className="doc-meta">
-            {timeAgo(d.updatedAt)}
-            {preview(d) && <> · {preview(d)}</>}
-          </span>
-        </button>
-        <div className="doc-actions">
-          <button
-            type="button"
-            className="doc-action-btn"
-            title={t('Move to folder')}
-            onClick={e => {
-              e.stopPropagation()
-              setMovingDocId(d.id)
-            }}
-          >
-            <GoogleIcon name="drive_file_move" size={15} />
-          </button>
-          <button
-            type="button"
-            className="doc-action-btn"
-            title={d.isPinned ? t('Unpin note') : t('Pin note')}
-            onClick={e => {
-              e.stopPropagation()
-              void togglePin(d)
-            }}
-          >
-            <GoogleIcon name="push_pin" size={15} fill={d.isPinned} />
-          </button>
-          <button
-            type="button"
-            className="doc-action-btn"
-            title={t('Duplicate document')}
-            aria-label={t('Duplicate {title}', { title: titleOf(d.title) })}
-            onClick={e => {
-              e.stopPropagation()
-              void duplicate(d)
-            }}
-          >
-            <GoogleIcon name="content_copy" size={15} />
-          </button>
-          <button
-            type="button"
-            className="doc-action-btn delete-btn"
-            title={t('Delete document')}
-            aria-label={t('Delete {title}', { title: titleOf(d.title) })}
-            onClick={e => {
-              e.stopPropagation()
-              setDocToDelete(d)
-            }}
-          >
-            <GoogleIcon name="delete" size={15} />
-          </button>
-        </div>
-      </div>
-    )
   }
 
   const backup = async () => {
@@ -562,11 +522,7 @@ export default function WritingWorkspace() {
     setLinkOpen(false)
   }
 
-  const preview = (d: LocalDocument) => plainText(d.content).replace(/\s+/g, ' ').trim().slice(0, 90)
-  const needle = query.trim().toLowerCase()
-  const filtered = needle
-    ? docs.filter(d => d.title.toLowerCase().includes(needle) || plainText(d.content).toLowerCase().includes(needle))
-    : docs
+  const textOf = useCallback((d: LocalDocument) => plainText(d.content), [])
   const words = plainText(active?.content).trim().split(/\s+/).filter(Boolean).length
   const chars = plainText(active?.content).length
 
@@ -595,212 +551,53 @@ export default function WritingWorkspace() {
 
   return (
     <div className={`writing ${sidebar ? '' : 'sidebar-hidden'} ${focus ? 'focus' : ''}`}>
-      {/* Sidebar / Document Library */}
-      <aside className="documents" aria-label={t('Documents')}>
-        <div className="docs-head">
-          <h1>{t('Documents')}</h1>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              type="button"
-              className="new-btn"
-              onClick={() => {
-                setNewFolderName('')
-                setNewFolderOpen(true)
-              }}
-              aria-label={t('New folder')}
-              title={t('New folder')}
-            >
-              <GoogleIcon name="create_new_folder" size={17} />
-            </button>
-            <button type="button" className="new-btn" onClick={() => create(undefined)} aria-label={t('New document')}>
-              <GoogleIcon name="add" size={17} /> {t('New')}
-            </button>
-          </div>
-        </div>
-
-        <label className="search">
-          <GoogleIcon name="search" size={17} className="search-icon" />
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={t('Search titles and text…')}
-            aria-label={t('Search documents')}
-          />
-        </label>
-
-        <div className="document-list">
-          {!filtered.length && needle && <p className="list-empty">{t('Nothing matches “{query}”.', { query: query.trim() })}</p>}
-
-          {/* Folders Section */}
-          {!needle && folders.length > 0 && (
-            <div className="folders-section-header">
-              <span>{t('Folders')}</span>
-            </div>
-          )}
-
-          {!needle && folders.map(f => {
-            const isExpanded = expandedFolders.has(f.id)
-            const folderDocs = docs.filter(d => d.folderId === f.id)
-            const isDragTarget = dragOverFolderId === f.id
-            return (
-              <div
-                key={f.id}
-                className={`folder-group ${isDragTarget ? 'drag-over' : ''}`}
-                onDragOver={e => {
-                  e.preventDefault()
-                  if (dragOverFolderId !== f.id) setDragOverFolderId(f.id)
-                }}
-                onDragLeave={() => {
-                  if (dragOverFolderId === f.id) setDragOverFolderId(null)
-                }}
-                onDrop={async e => {
-                  e.preventDefault()
-                  setDragOverFolderId(null)
-                  const docId = e.dataTransfer.getData('text/plain')
-                  if (docId) {
-                    await db.documents.update(docId, { folderId: f.id, updatedAt: new Date().toISOString() })
-                    setExpandedFolders(prev => new Set(prev).add(f.id))
-                    await refresh(activeId)
-                    const targetDoc = docs.find(d => d.id === docId)
-                    if (targetDoc) {
-                      setNotice({ text: t('Moved "{title}" to "{folder}"', { title: titleOf(targetDoc.title), folder: f.title }) })
-                    }
-                  }
-                }}
-              >
-                <div className="folder-row">
-                  <button
-                    type="button"
-                    className="folder-toggle"
-                    onClick={() => {
-                      const next = new Set(expandedFolders)
-                      if (isExpanded) next.delete(f.id)
-                      else next.add(f.id)
-                      setExpandedFolders(next)
-                    }}
-                    onDoubleClick={e => {
-                      e.stopPropagation()
-                      setFolderToRename(f)
-                      setRenameFolderTitle(f.title)
-                    }}
-                    title={t('Click to expand, double-click to rename')}
-                  >
-                    <GoogleIcon name="chevron_right" size={16} className={`folder-chevron ${isExpanded ? 'open' : ''}`} />
-                    <GoogleIcon name={isExpanded ? 'folder_open' : 'folder'} size={18} className="folder-icon" />
-                    <span className="folder-title">{f.title}</span>
-                    <span className="folder-count">{folderDocs.length}</span>
-                  </button>
-
-                  <div className="doc-actions">
-                    <button
-                      type="button"
-                      className="doc-action-btn"
-                      title={t('New document in folder')}
-                      onClick={e => {
-                        e.stopPropagation()
-                        void create(f.id)
-                      }}
-                    >
-                      <GoogleIcon name="add" size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className="doc-action-btn"
-                      title={t('Rename folder')}
-                      onClick={e => {
-                        e.stopPropagation()
-                        setFolderToRename(f)
-                        setRenameFolderTitle(f.title)
-                      }}
-                    >
-                      <GoogleIcon name="edit" size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="doc-action-btn delete-btn"
-                      title={t('Delete folder')}
-                      onClick={e => {
-                        e.stopPropagation()
-                        setFolderToDelete(f)
-                        setDeleteWithDocs(false)
-                      }}
-                    >
-                      <GoogleIcon name="delete" size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div className="folder-contents">
-                    {folderDocs.map(d => renderDocumentRow(d))}
-                    {folderDocs.length === 0 && (
-                      <div className="folder-empty-state">
-                        <p className="folder-empty-text">{t('Empty folder')}</p>
-                        <button
-                          type="button"
-                          className="folder-add-quick-btn"
-                          onClick={() => void create(f.id)}
-                        >
-                          <GoogleIcon name="add" size={13} /> {t('Create a document')}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {/* Uncategorized or Search Results Section */}
-          {!needle && folders.length > 0 && docs.some(d => !d.folderId) && (
-            <div className="folders-section-header" style={{ marginTop: 8 }}>
-              <span>{t('Uncategorized')}</span>
-            </div>
-          )}
-
-          <div
-            className={`uncategorized-zone ${dragOverUncategorized ? 'drag-over' : ''}`}
-            onDragOver={e => {
-              e.preventDefault()
-              if (!dragOverUncategorized) setDragOverUncategorized(true)
-            }}
-            onDragLeave={() => setDragOverUncategorized(false)}
-            onDrop={async e => {
-              e.preventDefault()
-              setDragOverUncategorized(false)
-              const docId = e.dataTransfer.getData('text/plain')
-              if (docId) {
-                await db.documents.update(docId, { folderId: undefined, updatedAt: new Date().toISOString() })
-                await refresh(activeId)
-              }
-            }}
-          >
-            {(needle ? filtered : docs.filter(d => !d.folderId)).map(d => renderDocumentRow(d))}
-            {!needle && docs.filter(d => !d.folderId).length === 0 && folders.length > 0 && (
-              <div className="uncategorized-empty-drop">
-                {t('Drop here to remove from folder')}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="docs-footer">
-          <button className="button" onClick={() => fileRef.current?.click()}>
-            <GoogleIcon name="upload_file" size={16} /> {t('Import')}
-          </button>
-          <button className="button" onClick={() => void backup()}>
-            <GoogleIcon name="cloud_download" size={16} /> {t('Backup')}
-          </button>
-          <input
-            ref={fileRef}
-            className="sr-only"
-            type="file"
-            accept=".json,.md,.markdown,.txt,.html,.htm"
-            onChange={e => void importFile(e.target.files?.[0])}
-          />
-          <p>{t('Stored only in this browser. Back up now and then.')}</p>
-        </div>
-      </aside>
+      <DocumentSidebar
+        docs={docs}
+        folders={folders}
+        activeId={activeId}
+        trashCount={trash.length}
+        titleOf={titleOf}
+        textOf={textOf}
+        expandedFolders={expandedFolders}
+        onToggleFolder={id =>
+          setExpandedFolders(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+          })
+        }
+        onSelect={selectDocument}
+        onCreate={folderId => void create(folderId)}
+        onNewFolder={() => {
+          setNewFolderName('')
+          setNewFolderOpen(true)
+        }}
+        onRenameFolder={f => {
+          setFolderToRename(f)
+          setRenameFolderTitle(f.title)
+        }}
+        onDeleteFolder={f => {
+          setFolderToDelete(f)
+          setDeleteWithDocs(false)
+        }}
+        onMoveToFolder={(id, folderId) => void moveToFolder(id, folderId)}
+        onPickFolder={setMovingDocId}
+        onTogglePin={d => void togglePin(d)}
+        onDuplicate={d => void duplicate(d)}
+        onTrash={d => void moveToTrash(d)}
+        onOpenTrash={() => setTrashOpen(true)}
+        onQuickFind={() => setQuickFindOpen(true)}
+        onImport={() => fileRef.current?.click()}
+        onBackup={() => void backup()}
+      />
+      <input
+        ref={fileRef}
+        className="sr-only"
+        type="file"
+        accept=".json,.md,.markdown,.txt,.html,.htm"
+        onChange={e => void importFile(e.target.files?.[0])}
+      />
 
       {sidebar && <button type="button" className="panel-scrim" aria-label={t('Close documents')} onClick={() => setSidebar(false)} />}
 
@@ -816,21 +613,23 @@ export default function WritingWorkspace() {
             <GoogleIcon name={sidebar ? 'dock_to_left' : 'menu_open'} size={20} />
           </button>
 
+          {active && (
+            <nav className="header-breadcrumb" aria-label={t('Location')}>
+              <button type="button" className="breadcrumb-btn" onClick={() => setMovingDocId(active.id)} title={t('Move to folder')}>
+                <GoogleIcon name={activeFolder ? 'folder' : 'description'} size={15} />
+                <span>{activeFolder ? activeFolder.title : t('Pages')}</span>
+              </button>
+              <span className="breadcrumb-sep">/</span>
+              <span className="breadcrumb-current">
+                {active.icon && <span className="breadcrumb-emoji">{active.icon}</span>}
+                {titleOf(active.title)}
+              </span>
+            </nav>
+          )}
+
           <SaveIndicator state={save} />
 
           <div className="header-actions">
-            <MenuButton
-              label={t('Export')}
-              icon={<GoogleIcon name="download" size={16} />}
-              items={[
-                { label: 'Markdown', hint: '.md', onSelect: () => exportActive('md') },
-                { label: t('Plain text'), hint: '.txt', onSelect: () => exportActive('txt') },
-                { label: t('Web page'), hint: '.html', onSelect: () => exportActive('html') },
-                'separator',
-                { label: t('Print or save as PDF'), icon: <GoogleIcon name="print" size={16} />, onSelect: () => window.print() },
-              ]}
-            />
-
             {active && (
               <PageFontButton
                 font={active.font ?? 'default'}
@@ -849,6 +648,27 @@ export default function WritingWorkspace() {
             <Dictation editor={editor} onError={text => setNotice({ text, error: true })} />
 
             <FullModeButton kind="focus" />
+
+            {active && (
+              <MenuButton
+                variant="icon"
+                label={t('Page options')}
+                icon={<GoogleIcon name="more_horiz" size={20} />}
+                items={[
+                  { label: t('Full width'), icon: <GoogleIcon name="width_full" size={16} />, checked: !!active.fullWidth, onSelect: () => patchActive({ fullWidth: !active.fullWidth }) },
+                  { label: active.isPinned ? t('Remove from Favorites') : t('Add to Favorites'), icon: <GoogleIcon name="star" size={16} fill={active.isPinned} />, onSelect: () => void togglePin(active) },
+                  { label: t('Duplicate'), icon: <GoogleIcon name="content_copy" size={16} />, onSelect: () => void duplicate(active) },
+                  { label: t('Move to folder'), icon: <GoogleIcon name="drive_file_move" size={16} />, onSelect: () => setMovingDocId(active.id) },
+                  'separator',
+                  { label: t('Export as Markdown'), hint: '.md', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('md') },
+                  { label: t('Export as plain text'), hint: '.txt', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('txt') },
+                  { label: t('Export as web page'), hint: '.html', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('html') },
+                  { label: t('Print or save as PDF'), icon: <GoogleIcon name="print" size={16} />, onSelect: () => window.print() },
+                  'separator',
+                  { label: t('Move to Trash'), icon: <GoogleIcon name="delete" size={16} />, danger: true, onSelect: () => void moveToTrash(active) },
+                ]}
+              />
+            )}
           </div>
         </header>
 
@@ -868,32 +688,56 @@ export default function WritingWorkspace() {
         />
 
         {/* Scrollable Editor Container */}
-        <div className="editor-scroll">
+        <div
+          className="editor-scroll"
+          onMouseDown={e => {
+            // Clicking the empty space around/below the page puts the caret at the end, like Notion.
+            if (!editor || !(e.target instanceof HTMLElement)) return
+            if (e.target === e.currentTarget || e.target.classList.contains('page') || e.target.classList.contains('editor-tail')) {
+              e.preventDefault()
+              editor.chain().focus('end').run()
+            }
+          }}
+        >
           {active ? (
             <article
-              className={`page ${fontFamily(active.font) ? 'has-font' : ''}`}
+              className={`page ${fontFamily(active.font) ? 'has-font' : ''} ${active.fullWidth ? 'full-width' : ''}`}
               style={{ '--doc-font': fontFamily(active.font) ?? undefined } as React.CSSProperties}
             >
-              {/* Clean Modern Breadcrumb */}
-              <div className="doc-breadcrumb">
-                <button
-                  type="button"
-                  className="breadcrumb-btn"
-                  onClick={() => setMovingDocId(active.id)}
-                  title={t('Move to folder')}
-                >
-                  <GoogleIcon name="folder" size={15} className="breadcrumb-folder-icon" />
-                  <span>{activeFolder ? activeFolder.title : t('All documents')}</span>
-                </button>
-                <span className="breadcrumb-sep">/</span>
-                <span className="breadcrumb-current">{titleOf(active.title)}</span>
+              <div className={`page-header ${active.icon ? 'has-icon' : ''}`}>
+                {active.icon && (
+                  <button type="button" className="page-icon" onClick={() => setIconPickerOpen(v => !v)} title={t('Change icon')} aria-label={t('Change icon')}>
+                    {active.icon}
+                  </button>
+                )}
+                <div className="page-controls">
+                  {!active.icon && (
+                    <button type="button" className="page-control" onClick={() => setIconPickerOpen(v => !v)}>
+                      <GoogleIcon name="add_reaction" size={16} /> {t('Add icon')}
+                    </button>
+                  )}
+                  <button type="button" className="page-control width-toggle" onClick={() => patchActive({ fullWidth: !active.fullWidth })}>
+                    <GoogleIcon name={active.fullWidth ? 'width_normal' : 'width_full'} size={16} /> {t(active.fullWidth ? 'Normal width' : 'Full width')}
+                  </button>
+                </div>
+                {iconPickerOpen && (
+                  <PageIconPicker
+                    current={active.icon}
+                    onPick={icon => {
+                      patchActive({ icon })
+                      setIconPickerOpen(false)
+                    }}
+                    onClose={() => setIconPickerOpen(false)}
+                  />
+                )}
               </div>
 
-              <input
+              <textarea
                 ref={titleRef}
                 className="title-input"
+                rows={1}
                 value={active.title}
-                onChange={e => updateTitle(e.target.value)}
+                onChange={e => updateTitle(e.target.value.replace(/\n/g, ' '))}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor) {
                     e.preventDefault()
@@ -970,10 +814,12 @@ export default function WritingWorkspace() {
                   </BubbleMenu>
 
                   <SlashMenu editor={editor} onPickImage={() => imageFileRef.current?.click()} />
+                  <BlockHandle editor={editor} />
                 </>
               )}
 
               <EditorContent editor={editor} />
+              <div className="editor-tail" aria-hidden="true" />
 
               <footer className="document-stats">
                 <span>{t('{n} words', { n: words })}</span>
@@ -1000,7 +846,7 @@ export default function WritingWorkspace() {
             <input
               className="modal-input"
               autoFocus
-              placeholder="e.g. Work, Notes, Research..."
+                            placeholder={t('e.g. Work, Notes, Research…')}
               value={newFolderName}
               onChange={e => setNewFolderName(e.target.value)}
               onKeyDown={e => {
@@ -1075,9 +921,7 @@ export default function WritingWorkspace() {
                 />
                 <div className="delete-option-info">
                   <strong>{t('Delete folder only')}</strong>
-                  <small>
-                    Giữ lại {docs.filter(d => d.folderId === folderToDelete.id).length} tài liệu và chuyển ra danh sách Chưa phân loại.
-                  </small>
+                  <small>{t('Keep its {n} pages; they move to Pages.', { n: docs.filter(d => d.folderId === folderToDelete.id).length })}</small>
                 </div>
               </label>
 
@@ -1090,9 +934,7 @@ export default function WritingWorkspace() {
                 />
                 <div className="delete-option-info">
                   <strong style={{ color: 'var(--danger)' }}>{t('Delete folder and notes')}</strong>
-                  <small>
-                    Xoá vĩnh viễn cả thư mục cùng tất cả {docs.filter(d => d.folderId === folderToDelete.id).length} tài liệu bên trong.
-                  </small>
+                  <small>{t('Move the folder’s {n} pages to Trash (restorable for {days} days).', { n: docs.filter(d => d.folderId === folderToDelete.id).length, days: TRASH_RETENTION_DAYS })}</small>
                 </div>
               </label>
             </div>
@@ -1145,22 +987,19 @@ export default function WritingWorkspace() {
           <div className="move-modal-list">
             <button
               className="button move-item"
-              onClick={async () => {
-                await db.documents.update(movingDocId, { folderId: undefined, updatedAt: new Date().toISOString() })
-                await refresh(activeId)
+              onClick={() => {
+                void moveToFolder(movingDocId)
                 setMovingDocId(null)
               }}
             >
-              <GoogleIcon name="folder_open" size={18} /> {t('Uncategorized')}
+              <GoogleIcon name="description" size={18} /> {t('Pages (no folder)')}
             </button>
             {folders.map(f => (
               <button
                 key={f.id}
                 className="button move-item"
-                onClick={async () => {
-                  await db.documents.update(movingDocId, { folderId: f.id, updatedAt: new Date().toISOString() })
-                  setExpandedFolders(prev => new Set(prev).add(f.id))
-                  await refresh(activeId)
+                onClick={() => {
+                  void moveToFolder(movingDocId, f.id)
                   setMovingDocId(null)
                 }}
               >
@@ -1171,21 +1010,32 @@ export default function WritingWorkspace() {
         </Modal>
       )}
 
-      {/* Delete Document Confirmation Modal */}
-      {docToDelete && (
-        <Modal title={t('Delete document')} onClose={() => setDocToDelete(null)}>
-          <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-            {rich(t('Are you sure you want to delete **“{title}”**? This action cannot be undone.', { title: titleOf(docToDelete.title) }))}
-          </p>
-          <div className="modal-footer">
-            <button type="button" className="button" onClick={() => setDocToDelete(null)} data-autofocus>
-              {t('Cancel')}
-            </button>
-            <button type="button" className="button danger" onClick={() => void confirmDelete()}>
-              {t('Delete')}
-            </button>
-          </div>
-        </Modal>
+      {trashOpen && (
+        <TrashDialog
+          items={trash}
+          titleOf={titleOf}
+          onRestore={d => void restore(d)}
+          onDeleteForever={d => void deleteForever([d.id])}
+          onEmpty={() => void deleteForever(trash.map(d => d.id))}
+          onClose={() => setTrashOpen(false)}
+        />
+      )}
+
+      {quickFindOpen && (
+        <QuickFindPalette
+          docs={docs}
+          folders={folders}
+          titleOf={titleOf}
+          textOf={textOf}
+          onOpen={id => {
+            selectDocument(id)
+            if (focus) return
+            const doc = docs.find(d => d.id === id)
+            if (doc?.folderId) setExpandedFolders(prev => new Set(prev).add(doc.folderId!))
+          }}
+          onCreate={title => void create(undefined, title)}
+          onClose={() => setQuickFindOpen(false)}
+        />
       )}
 
       {/* Notification Toast */}
@@ -1195,6 +1045,17 @@ export default function WritingWorkspace() {
           <button className="icon-button" onClick={() => setNotice(null)} aria-label={t('Dismiss notification')}>
             <GoogleIcon name="close" size={16} />
           </button>
+          {notice.action && (
+            <button
+              className="button"
+              onClick={() => {
+                notice.action?.run()
+                setNotice(null)
+              }}
+            >
+              {notice.action.label}
+            </button>
+          )}
           {notice.offerExport && (
             <button className="button" onClick={() => void backup()}>
               {t('Export backup now')}

@@ -1,8 +1,12 @@
 import type { JSONContent } from '@tiptap/react'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
-/** `font`: page font id (see components/write/fonts.ts); absent = default. */
-export type LocalDocument = { id:string; title:string; icon?:string; content:JSONContent; font?:string; createdAt:string; updatedAt:string; version:1; folderId?:string; isPinned?:boolean }
+/**
+ * `font`: page font id (see components/write/fonts.ts); absent = default.
+ * `icon`: emoji shown before the title. `fullWidth`: page uses the whole editor width.
+ * `deletedAt`: set while the document sits in Trash; absent = live document.
+ */
+export type LocalDocument = { id:string; title:string; icon?:string; content:JSONContent; font?:string; createdAt:string; updatedAt:string; version:1; folderId?:string; isPinned?:boolean; fullWidth?:boolean; deletedAt?:string }
 export type LocalBoard = { id:string; title:string; snapshot:unknown; preview?:string; createdAt:string; updatedAt:string; version:1 }
 export type LocalFolder = { id:string; title:string; icon?:string; color?:string; createdAt:string; updatedAt:string; version:1 }
 export type Backup = { format:'my-space-backup'; version:1; exportedAt:string; documents:LocalDocument[]; boards:LocalBoard[]; folders?:LocalFolder[] }

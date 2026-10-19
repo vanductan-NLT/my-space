@@ -40,6 +40,9 @@ const block = (node: JSONContent): string => {
       return children.map(block).join('\n\n').split('\n').map(l => `> ${l}`.trimEnd()).join('\n')
     case 'callout':
       return children.map(block).join('\n\n').split('\n').map(l => `> ${node.attrs?.icon ?? '💡'} ${l}`.trimEnd()).join('\n')
+    case 'toggle':
+      // No Markdown toggle syntax: the summary becomes a bullet, the body is indented under it.
+      return `- ${indent(children2md(node), '  ')}`
     case 'codeBlock':
       return `\`\`\`${node.attrs?.language ?? ''}\n${children.map(c => c.text ?? '').join('')}\n\`\`\``
     case 'image':

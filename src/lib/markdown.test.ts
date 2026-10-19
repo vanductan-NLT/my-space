@@ -4,6 +4,14 @@ import { looksLikeMarkdown, markdownToHtml, normalizePastedMarkdown, toMarkdown 
 const text = (t: string, marks?: { type: string; attrs?: Record<string, unknown> }[]) => ({ type: 'text', text: t, marks })
 
 describe('toMarkdown', () => {
+  it('exports a toggle as a bullet with its body indented underneath', () => {
+    const doc = {
+      type: 'doc',
+      content: [{ type: 'toggle', attrs: { open: false }, content: [{ type: 'paragraph', content: [text('Summary')] }, { type: 'paragraph', content: [text('Body')] }] }],
+    }
+    expect(toMarkdown(doc)).toBe('- Summary\n  Body\n')
+  })
+
   it('keeps headings, emphasis, links, lists and tasks', () => {
     const doc = {
       type: 'doc',

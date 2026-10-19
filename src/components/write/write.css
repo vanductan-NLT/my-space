@@ -16,44 +16,97 @@
 .documents {
   min-width: 0;
   overflow: hidden;
-
-  background: var(--surface-dim, #f7f7f5); /* Notion-like light gray */
-  border-right: 1px solid var(--border-subtle, rgba(0,0,0,0.05));
+  /* Tinted from the theme's own text colour, so it reads in light and dark. */
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  --row-hover: color-mix(in srgb, var(--text) 6%, transparent);
+  --row-active: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 .docs-head {
-  padding: 18px 14px 12px 18px;
+  padding: 14px 10px 6px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .docs-head h1 {
-  font: 500 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font: 600 14px Outfit, Manrope, sans-serif;
   margin: 0;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.search {
-  margin: 0 12px 10px;
-  height: 38px;
-  padding: 0 12px;
+.docs-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.docs-nav {
+  padding: 0 8px 2px;
+}
+
+.docs-nav-item {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
-  border: none;
-  box-shadow: none;
-  padding: 0 4px;
-  border-radius: 11px;
+  color: var(--secondary);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.docs-nav-item:hover {
+  background: var(--row-hover);
+  color: var(--text);
+}
+
+.docs-nav-label {
+  flex: 1;
+}
+
+.docs-nav-item kbd,
+.docs-count {
+  font: 10.5px 'JetBrains Mono', ui-monospace, monospace;
   color: var(--muted);
-  transition: border-color 0.15s ease;
+  background: none;
+  border: 0;
+}
+
+.search {
+  margin: 0 8px 6px;
+  height: 32px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.search:hover {
+  background: var(--row-hover, var(--surface-hi));
 }
 
 .search:focus-within {
-  border-color: var(--mint);
+  border-color: var(--mint-border);
+  background: transparent;
 }
 
 .search input {
@@ -63,10 +116,26 @@
   outline: 0;
   color: var(--text);
   background: none;
+  font-size: 13px;
 }
 
 .search input::placeholder {
   color: var(--muted);
+}
+
+.search-clear {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.search-clear:hover {
+  color: var(--text);
 }
 
 .document-list {
@@ -76,38 +145,33 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 6px;
 }
 
 .document-row {
   position: relative;
   width: 100%;
-  border-radius: 10px;
+  min-height: 32px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.12s ease;
 }
 
-.document-row:hover {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+.document-row:hover,
+.document-row.menu-open {
+  background: var(--row-hover);
 }
 
 .document-row.active {
-  background: rgba(0, 0, 0, 0.08);
-  border-radius: 4px;
-}
-
-/* A slim accent bar marks the open item without tinting the whole row. */
-.document-row.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 3px;
-  background: var(--mint);
+  background: var(--row-active);
 }
 
 .doc-select-btn {
@@ -116,28 +180,42 @@
   border: 0;
   background: transparent;
   text-align: left;
-  padding: 10px 8px 10px 14px;
+  padding: 6px 8px;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-icon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.document-row.active .doc-icon {
+  color: var(--mint);
 }
 
 .doc-title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 13.5px;
-  color: var(--text);
+  color: var(--secondary);
 }
 
-.doc-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--muted);
+.document-row.active .doc-title {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .list-empty {
@@ -146,50 +224,91 @@
   color: var(--muted);
 }
 
+/* Row actions float over the right edge, so hidden actions never shrink the title. */
 .doc-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding-right: 6px;
+  gap: 1px;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
 }
 
 .document-row:hover .doc-actions,
 .document-row:focus-within .doc-actions,
+.document-row.menu-open .doc-actions,
 .folder-row:hover .doc-actions,
-.folder-row:focus-within .doc-actions {
+.folder-row:focus-within .doc-actions,
+.folder-row.menu-open .doc-actions {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.document-row:hover .doc-title,
+.document-row.menu-open .doc-title {
+  padding-right: 26px;
+}
+
+.folder-row:hover .folder-count,
+.folder-row.menu-open .folder-count {
+  visibility: hidden;
 }
 
 .doc-action-btn {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
-  color: var(--secondary);
+  color: var(--muted);
   display: grid;
   place-items: center;
   cursor: pointer;
   padding: 0;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
-.doc-action-btn:hover {
-  background: var(--surface);
+.doc-action-btn:hover,
+.doc-action-btn[aria-expanded='true'] {
+  background: var(--row-hover, var(--surface-hi));
   color: var(--text);
 }
 
-.doc-action-btn.delete-btn:hover {
-  color: var(--danger);
-  background: var(--danger-soft);
+.docs-add-page {
+  min-height: 30px;
+  margin-top: 2px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.docs-add-page:hover {
+  background: var(--row-hover);
+  color: var(--text);
 }
 
 .docs-footer {
   margin-top: auto;
-  padding: 8px 10px 12px;
+  padding: 6px 8px 12px;
   border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.docs-footer-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
@@ -197,7 +316,7 @@
 
 /* Occasional actions: quiet text buttons, not two big slabs. */
 .docs-footer .button {
-  min-height: 36px;
+  min-height: 32px;
   font-size: 12px;
   font-weight: 500;
   padding: 0 10px;
@@ -207,12 +326,11 @@
 }
 
 .docs-footer .button:hover {
-  background: var(--surface-hi);
+  background: var(--row-hover);
   color: var(--text);
 }
 
 .docs-footer p {
-  grid-column: 1 / -1;
   margin: 2px 4px 0;
   font-size: 11px;
   line-height: 1.5;
@@ -310,8 +428,14 @@
 }
 
 .page {
+  position: relative;
   max-width: 760px;
   margin: 0 auto;
+  transition: max-width 0.2s ease;
+}
+
+.page.full-width {
+  max-width: none;
 }
 
 /* Page font (per document): title and body follow it; default keeps the app's fonts. */
@@ -322,6 +446,7 @@
 }
 
 .title-input {
+  display: block;
   width: 100%;
   border: 0;
   background: none;
@@ -329,8 +454,11 @@
   font: 700 38px / 1.2 Outfit, sans-serif;
   letter-spacing: -0.02em;
   padding: 0;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
   outline: 0;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
 }
 
 .title-input::placeholder {
@@ -347,6 +475,11 @@
 
 .prose-editor p {
   margin: 0 0 1.1em;
+}
+
+/* The first block sits right under the title, whatever it is. */
+.prose-editor > :first-child {
+  margin-top: 0;
 }
 
 .prose-editor h1, .prose-editor h2, .prose-editor h3 {
@@ -536,13 +669,28 @@
 }
 
 /* Hint on the empty line you're on (Notion style), and on an empty page. */
+/* Absolutely positioned (not floated) so the caret always sits at the start of
+   the line, even while an IME such as Vietnamese Telex is composing. */
+.prose-editor .is-empty,
+.prose-editor p.is-editor-empty:first-child {
+  position: relative;
+}
+
 .prose-editor .is-empty::before,
 .prose-editor p.is-editor-empty:first-child::before {
+  position: absolute;
+  inset: 0 auto auto 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--muted);
   content: attr(data-placeholder);
-  float: left;
-  height: 0;
   pointer-events: none;
+}
+
+.prose-editor.is-composing .is-empty::before {
+  content: none;
 }
 
 .document-stats {
@@ -1262,8 +1410,15 @@
   transition: background 0.12s ease;
 }
 
-.folder-row:hover {
-  background: var(--surface-hi);
+.folder-row {
+  position: relative;
+  min-height: 32px;
+  margin: 0;
+}
+
+.folder-row:hover,
+.folder-row.menu-open {
+  background: var(--row-hover);
 }
 
 .folder-toggle {
@@ -1309,7 +1464,7 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
-  background: var(--surface-hi);
+  background: var(--row-hover, var(--surface-hi));
   padding: 1px 7px;
   border-radius: 999px;
   margin-right: 4px;
@@ -1354,6 +1509,8 @@
 }
 
 .folder-add-quick-btn {
+  margin: 2px 0 4px;
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1375,7 +1532,7 @@
 
 .uncategorized-zone {
   min-height: 40px;
-  padding-bottom: 20px;
+  padding-bottom: 12px;
   transition: all 0.15s ease;
 }
 
@@ -1395,89 +1552,6 @@
   justify-content: center;
   font-size: 12px;
   color: var(--muted);
-}
-
-.pinned-icon {
-  margin-right: 6px;
-  color: var(--mint);
-  vertical-align: middle;
-  flex-shrink: 0;
-}
-
-.doc-icon {
-  margin-right: 8px;
-  color: var(--muted);
-  vertical-align: middle;
-  flex-shrink: 0;
-  transition: color 0.15s ease;
-}
-
-.document-row:hover .doc-icon,
-.document-row.active .doc-icon {
-  color: var(--mint);
-}
-
-.folder-chevron {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.folder-chevron.open {
-  transform: rotate(90deg);
-}
-
-.folder-icon {
-  color: var(--mint);
-  flex-shrink: 0;
-  margin-right: 2px;
-}
-
-/* Modern Document Breadcrumb */
-.doc-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 16px;
-}
-
-.breadcrumb-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  color: var(--secondary);
-  transition: all 0.15s ease;
-  font-size: inherit;
-}
-
-.breadcrumb-btn:hover {
-  background: var(--surface-hi);
-  color: var(--text);
-}
-
-.breadcrumb-folder-icon {
-  color: var(--mint);
-}
-
-.breadcrumb-sep {
-  opacity: 0.5;
-  font-size: 11px;
-}
-
-.breadcrumb-current {
-  color: var(--text);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 320px;
 }
 
 /* Modal Styling */

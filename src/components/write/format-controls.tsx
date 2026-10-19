@@ -141,6 +141,7 @@ const BLOCKS = [
   { label: 'Bulleted list', icon: <GoogleIcon name="format_list_bulleted" size={16} />, active: (e: Editor) => e.isActive('bulletList'), run: (e: Editor) => e.chain().focus().toggleBulletList().run() },
   { label: 'Numbered list', icon: <GoogleIcon name="format_list_numbered" size={16} />, active: (e: Editor) => e.isActive('orderedList'), run: (e: Editor) => e.chain().focus().toggleOrderedList().run() },
   { label: 'To-do list', icon: <GoogleIcon name="check_box" size={16} />, active: (e: Editor) => e.isActive('taskList'), run: (e: Editor) => e.chain().focus().toggleTaskList().run() },
+  { label: 'Toggle list', icon: <GoogleIcon name="arrow_right" size={16} />, active: (e: Editor) => e.isActive('toggle'), run: (e: Editor) => (e.isActive('toggle') ? e.chain().focus().lift('toggle').run() : e.chain().focus().setToggle().run()) },
   { label: 'Callout', icon: <GoogleIcon name="lightbulb" size={16} />, active: (e: Editor) => e.isActive('callout'), run: (e: Editor) => e.chain().focus().toggleCallout().run() },
   { label: 'Quote', icon: <GoogleIcon name="format_quote" size={16} />, active: (e: Editor) => e.isActive('blockquote'), run: (e: Editor) => e.chain().focus().toggleBlockquote().run() },
   { label: 'Code', icon: <GoogleIcon name="code" size={16} />, active: (e: Editor) => e.isActive('codeBlock'), run: (e: Editor) => e.chain().focus().toggleCodeBlock().run() },

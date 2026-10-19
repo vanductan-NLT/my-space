@@ -1,0 +1,627 @@
+/* Styles for the Notion-like pieces of Write: header breadcrumb, page icon,
+   block handle, toggle list, Quick Find, Trash and compact menus. */
+
+/* ---------- Header breadcrumb ---------- */
+.header-breadcrumb {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.header-breadcrumb .breadcrumb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  max-width: 180px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.header-breadcrumb .breadcrumb-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-breadcrumb .breadcrumb-btn:hover {
+  background: var(--surface-hi);
+  color: var(--text);
+}
+
+.header-breadcrumb .breadcrumb-sep {
+  opacity: 0.5;
+  padding: 0 2px;
+}
+
+.header-breadcrumb .breadcrumb-current {
+  min-width: 0;
+  padding: 4px 6px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumb-emoji {
+  margin-right: 6px;
+}
+
+/* Narrow headers keep only the page name; the folder is one tap away in the page menu. */
+@media (max-width: 1000px) {
+  .header-breadcrumb .breadcrumb-btn,
+  .header-breadcrumb .breadcrumb-sep {
+    display: none;
+  }
+}
+
+.write-header .header-actions {
+  flex: none;
+}
+
+/* ---------- Page header: icon + hover controls ---------- */
+.page-header {
+  position: relative;
+  min-height: 34px;
+  margin-bottom: 4px;
+}
+
+.page-icon {
+  display: block;
+  margin: 0 0 6px -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 64px;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.page-icon:hover {
+  background: var(--surface-hi);
+}
+
+.page-controls {
+  display: flex;
+  gap: 4px;
+  margin-left: -8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.page:hover .page-controls,
+.page-controls:focus-within {
+  opacity: 1;
+}
+
+.page-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.page-control:hover {
+  background: var(--surface-hi);
+  color: var(--text);
+}
+
+/* Touch screens have no hover: keep the controls visible but quiet. */
+@media (pointer: coarse) {
+  .page-controls {
+    opacity: 0.8;
+  }
+}
+
+.icon-picker {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(340px, calc(100vw - 32px));
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.12s ease;
+}
+
+.page-header.has-icon .icon-picker {
+  top: 78px;
+}
+
+.icon-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.icon-picker-link {
+  border: 0;
+  background: none;
+  color: var(--secondary);
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.icon-picker-link:hover {
+  background: var(--surface-hi);
+  color: var(--text);
+}
+
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+
+.icon-cell {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.icon-cell:hover,
+.icon-cell:focus-visible,
+.icon-cell[aria-pressed='true'] {
+  background: var(--surface-hi);
+  outline: none;
+}
+
+/* ---------- Clickable space below the content ---------- */
+.editor-tail {
+  height: 120px;
+  cursor: text;
+}
+
+/* ---------- Block handle (+ / drag) ---------- */
+.block-handle {
+  position: absolute;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  transform: translateX(calc(-100% - 6px));
+  animation: fadeIn 0.1s ease;
+}
+
+.block-handle-btn {
+  width: 22px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.block-handle-btn.grip {
+  cursor: grab;
+}
+
+.block-handle-btn:hover,
+.block-handle-btn[aria-expanded='true'] {
+  background: var(--surface-hi);
+  color: var(--text);
+}
+
+.block-menu {
+  position: fixed;
+  z-index: 300;
+  width: 240px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.12s ease;
+}
+
+.block-menu .menu-item {
+  min-height: 34px;
+}
+
+.block-menu .menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.block-menu .fmt-list {
+  max-height: none;
+}
+
+/* No hover on touch: phones use the keyboard bar instead. */
+@media (pointer: coarse) {
+  .block-handle,
+  .block-menu {
+    display: none;
+  }
+}
+
+/* ---------- Toggle list ---------- */
+.prose-editor .toggle-block {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  margin: 0.2em 0 0.6em;
+}
+
+.prose-editor .toggle-arrow {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: calc((1.8em - 24px) / 2);
+  margin-left: -4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--secondary);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.prose-editor .toggle-arrow:hover {
+  background: var(--surface-hi);
+  color: var(--text);
+}
+
+.prose-editor .toggle-arrow .material-symbols-outlined {
+  font-size: 22px;
+  transition: transform 0.15s ease;
+}
+
+.prose-editor .toggle-block[data-open='true'] > .toggle-arrow .material-symbols-outlined {
+  transform: rotate(90deg);
+}
+
+.prose-editor .toggle-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.prose-editor .toggle-content > :first-child {
+  margin-top: 0;
+}
+
+.prose-editor .toggle-content > p:first-child {
+  margin-bottom: 0.25em;
+}
+
+.prose-editor .toggle-content > :last-child {
+  margin-bottom: 0;
+}
+
+.prose-editor .toggle-block[data-open='false'] > .toggle-content > :not(:first-child) {
+  display: none;
+}
+
+/* ---------- Menus: fixed popovers, switches, danger items ---------- */
+.menu-popover.fixed {
+  position: fixed;
+  right: auto;
+  z-index: 300;
+}
+
+.menu-item.danger,
+.menu-item.danger svg,
+.menu-item.danger .material-symbols-outlined {
+  color: var(--danger);
+}
+
+.menu-item .material-symbols-outlined {
+  color: var(--secondary);
+}
+
+.menu-switch {
+  margin-left: auto;
+  width: 28px;
+  height: 16px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--border-strong);
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+.menu-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.menu-switch.on {
+  background: var(--mint);
+}
+
+.menu-switch.on::after {
+  transform: translateX(12px);
+}
+
+/* ---------- Quick Find ---------- */
+.quick-find-overlay {
+  align-items: start;
+  padding-top: min(14vh, 120px);
+}
+
+.quick-find {
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(560px, 72vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: fadeIn 0.12s ease;
+}
+
+.quick-find-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  height: 54px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.quick-find-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.quick-find-search kbd,
+.quick-find-foot kbd {
+  font: 11px 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--muted);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-right: 2px;
+}
+
+.quick-find-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.quick-find-section {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.quick-find-item {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.quick-find-item[aria-selected='true'] {
+  background: var(--surface-hi);
+}
+
+.quick-find-icon {
+  width: 22px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.quick-find-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.quick-find-meta {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.quick-find-foot {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .quick-find-foot {
+    display: none;
+  }
+}
+
+/* ---------- Trash ---------- */
+.trash-search {
+  margin: 0 0 8px;
+  border: 1px solid var(--border);
+}
+
+.trash-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -6px;
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: 8px;
+}
+
+.trash-row:hover {
+  background: var(--surface-hi);
+}
+
+.trash-icon {
+  width: 22px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted);
+}
+
+.trash-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.trash-title strong {
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-title small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.trash-delete:hover {
+  color: var(--danger);
+}
+
+.trash-empty {
+  padding: 28px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.trash-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.trash-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.button.small {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* A block picked up by its handle (node selection) gets a soft highlight. */
+.prose-editor > .ProseMirror-selectednode:not(img),
+.prose-editor li.ProseMirror-selectednode {
+  background: var(--mint-soft);
+  border-radius: 6px;
+  outline: none;
+}
+
+/* Width only matters when the editor is wider than the reading column. */
+@media (max-width: 850px) {
+  .page-control.width-toggle {
+    display: none;
+  }
+}
+
+/* Touch screens can't hover: row actions stay visible and keyboard hints go away. */
+@media (pointer: coarse) {
+  .documents .doc-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .documents .doc-title {
+    padding-right: 26px;
+  }
+  .documents .folder-row .doc-actions ~ .folder-count,
+  .docs-nav-item kbd {
+    display: none;
+  }
+}
