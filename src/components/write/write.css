@@ -1001,11 +1001,67 @@
   color: var(--danger);
 }
 
+.dictation-time {
+  flex: none;
+  font: 600 12.5px 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--secondary);
+}
+
+.dictation-lang.on {
+  border-color: var(--mint-border);
+  background: var(--mint-soft);
+  color: var(--mint);
+}
+
+.dictation-lang:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Words still being recognised, shown in place inside the page (never saved). */
+.prose-editor .live-transcript-preview {
+  color: var(--muted);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.prose-editor .live-transcript-preview::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--danger);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+.prose-editor .live-transcript-preview.idle {
+  opacity: 0.75;
+}
+
+/* Time stamps at the start of transcript paragraphs read as quiet labels. */
+.prose-editor p > code:first-child {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
 @media (max-width: 700px) {
   /* Phones: top of the screen, clear of the keyboard and bottom bar. */
   .dictation-bar {
     top: calc(10px + env(safe-area-inset-top));
     bottom: auto;
+    gap: 6px;
+    padding-left: 12px;
+  }
+  /* Icons only, so Stop always fits. */
+  .dictation-bar .dictation-text,
+  .dictation-bar .dictation-label {
+    display: none;
+  }
+  .dictation-lang,
+  .dictation-stop {
+    padding: 0 9px;
   }
 }
 

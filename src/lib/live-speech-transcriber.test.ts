@@ -143,6 +143,57 @@ describe('LiveSpeechTranscriber', () => {
   })
 })
 
+describe('LiveSpeechTranscriber interim handling', () => {
+  it('writes down words kept interim too long, then listens again', () => {
+    const { SR, instances } = makeFakeSR()
+    const timers = manualTimers()
+    let clock = 0
+    const finals: string[] = []
+    const t = new LiveSpeechTranscriber({ SR, lang: 'vi-VN', onFinal: f => finals.push(f), maxInterimMs: 12_000, now: () => clock, ...timers })
+    t.start()
+    instances[0].say('chúng ta bắt đầu', false)
+    clock = 11_000
+    instances[0].say('chúng ta bắt đầu họp', false)
+    expect(finals).toEqual([])
+    clock = 12_500
+    instances[0].say('chúng ta bắt đầu họp nhé', false)
+    expect(finals).toEqual(['chúng ta bắt đầu họp nhé'])
+    expect(instances[0].stopped).toBe(true)
+    // The engine's late copy of the same words is ignored.
+    instances[0].say('chúng ta bắt đầu họp nhé', true)
+    expect(finals).toHaveLength(1)
+    instances[0].onend?.()
+    timers.runNext()
+    expect(instances).toHaveLength(2)
+  })
+
+  it('times a new interim run from the last final result', () => {
+    const { SR, instances } = makeFakeSR()
+    let clock = 0
+    const finals: string[] = []
+    const t = new LiveSpeechTranscriber({ SR, lang: 'en-US', onFinal: f => finals.push(f), maxInterimMs: 10_000, now: () => clock })
+    t.start()
+    instances[0].say('first', false)
+    clock = 9_000
+    instances[0].say('first sentence', true)
+    clock = 15_000
+    instances[0].say('second', false)
+    expect(finals).toEqual(['first sentence'])
+  })
+
+  it('commits pending words once on stop({ flush: true })', () => {
+    const { SR, instances } = makeFakeSR()
+    const finals: string[] = []
+    const t = new LiveSpeechTranscriber({ SR, lang: 'en-US', onFinal: f => finals.push(f) })
+    t.start()
+    instances[0].say('almost done', false)
+    t.stop({ flush: true })
+    instances[0].say('almost done', true)
+    expect(finals).toEqual(['almost done'])
+    expect(t.active).toBe(false)
+  })
+})
+
 describe('supportsTrackInput', () => {
   it('is true when start() rejects a non-track argument', () => {
     expect(supportsTrackInput(makeFakeSR({ acceptsTrack: true }).SR)).toBe(true)

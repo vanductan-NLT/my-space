@@ -61,8 +61,15 @@ export type TranscriberOptions = {
   onInterim?: (text: string) => void
   /** A fatal error stopped transcription (e.g. microphone permission denied). */
   onFatal?: (error: string) => void
+  /**
+   * Chrome can keep a long run of speech "interim" (never final) until the
+   * session ends. After this many ms the pending words are committed as final
+   * and recognition restarts, so text keeps landing in real time. 0 = never.
+   */
+  maxInterimMs?: number
   /** Delay before restarting after the engine ends a session, in ms. */
   restartDelay?: (attempt: number) => number
+  now?: () => number
   setTimer?: (fn: () => void, ms: number) => unknown
   clearTimer?: (id: unknown) => void
 }
@@ -72,7 +79,10 @@ export class LiveSpeechTranscriber {
   private running = false
   private failures = 0
   private timer: unknown = null
-  private readonly opts: Required<Pick<TranscriberOptions, 'restartDelay' | 'setTimer' | 'clearTimer'>> & TranscriberOptions
+  private interimText = ''
+  /** When the current interim run began; null = no words pending. */
+  private interimSince: number | null = null
+  private readonly opts: Required<Pick<TranscriberOptions, 'restartDelay' | 'setTimer' | 'clearTimer' | 'now'>> & TranscriberOptions
 
   constructor(opts: TranscriberOptions) {
     this.opts = {
@@ -80,6 +90,7 @@ export class LiveSpeechTranscriber {
       restartDelay: attempt => (attempt === 0 ? 150 : Math.min(10000, 1000 * 2 ** (attempt - 1))),
       setTimer: (fn, ms) => setTimeout(fn, ms),
       clearTimer: id => clearTimeout(id as ReturnType<typeof setTimeout>),
+      now: () => Date.now(),
       ...opts,
     }
   }
@@ -95,23 +106,40 @@ export class LiveSpeechTranscriber {
     this.spawn()
   }
 
-  /** Stops for good; a result already being finalised may still arrive via onFinal. */
-  stop() {
+  /**
+   * Stops for good. With `flush`, words still pending are committed through
+   * onFinal right away and the engine's late copy of them is discarded;
+   * without it, a result already being finalised may still arrive via onFinal.
+   */
+  stop({ flush = false }: { flush?: boolean } = {}) {
     this.running = false
     if (this.timer !== null) this.opts.clearTimer(this.timer)
     this.timer = null
+    if (flush) this.commitInterim()
     const rec = this.rec
     this.rec = null
     if (rec) {
       rec.onend = null
       rec.onerror = null
+      if (flush) rec.onresult = null
       try {
-        rec.stop()
+        if (flush) rec.abort()
+        else rec.stop()
       } catch {
         // Already stopped.
       }
     }
+    this.interimText = ''
+    this.interimSince = null
     this.opts.onInterim?.('')
+  }
+
+  /** Hands pending interim words to onFinal (used when stopping or when they wait too long). */
+  private commitInterim() {
+    const text = this.interimText.replace(/\s+/g, ' ').trim()
+    this.interimText = ''
+    this.interimSince = null
+    if (text) this.opts.onFinal(text)
   }
 
   private spawn() {
@@ -132,9 +160,28 @@ export class LiveSpeechTranscriber {
         if (result.isFinal) {
           const clean = text.replace(/\s+/g, ' ').trim()
           if (clean) this.opts.onFinal(clean)
+          // The engine is finalising on its own; time the next interim run afresh.
+          this.interimSince = null
         } else pending += text
       }
-      this.opts.onInterim?.(pending.trim())
+      const interim = pending.trim()
+      this.interimText = interim
+      if (!interim) this.interimSince = null
+      else if (this.interimSince === null) this.interimSince = this.opts.now()
+      const max = this.opts.maxInterimMs ?? 0
+      if (interim && max && this.interimSince !== null && this.opts.now() - this.interimSince >= max) {
+        // Commit what was heard and start a fresh session; aborting drops the engine's copy.
+        this.commitInterim()
+        this.opts.onInterim?.('')
+        rec.onresult = null
+        try {
+          rec.abort()
+        } catch {
+          rec.onend?.()
+        }
+        return
+      }
+      this.opts.onInterim?.(interim)
     }
 
     rec.onerror = e => {

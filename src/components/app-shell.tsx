@@ -10,7 +10,6 @@ import { SettingsSheet } from './settings-sheet'
 import { useI18n } from '@/lib/i18n'
 import { ExitFullModeButton, FullModeContext, type FullModeKind } from './full-mode'
 import { useScreenWakeLock } from '@/lib/use-screen-wake-lock'
-import { MeetingRecorderBar } from './write/meeting-recorder'
 import { isTypingTarget } from '@/lib/keyboard-shortcuts'
 import { Modal } from './modal'
 
@@ -188,18 +187,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Modal>
       )}
       {mascotOn && <FloatingMascot />}
-      {/* Write shows its own bar; elsewhere this keeps a running meeting recording in view. */}
-      {pathname !== '/write' && (
-        <MeetingRecorderBar
-          activeId=""
-          onOpenDoc={id => {
-            try {
-              localStorage.setItem('my-space:last-document', id)
-            } catch {}
-            router.push('/write')
-          }}
-        />
-      )}
+
 
       <main className="workspace">
         {children}

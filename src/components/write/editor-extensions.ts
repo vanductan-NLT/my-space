@@ -22,6 +22,7 @@ import { CalloutNode } from './callout-node'
 import { ToggleNode } from './toggle-node'
 import { PageLinkNode } from './page-link-node'
 import { BlockEditingBehaviors } from './block-editing-behaviors'
+import { LiveTranscriptPreview } from './live-transcript-preview'
 
 /** The shared schema used for editing, rich clipboard paste and HTML import. */
 export const writeExtensions = [
@@ -49,6 +50,7 @@ export const writeExtensions = [
   ToggleNode,
   PageLinkNode,
   BlockEditingBehaviors,
+  LiveTranscriptPreview.configure({ listeningLabel: () => translate('Listening…', undefined, getLang()) }),
   TextStyle,
   Color,
   Highlight.configure({ multicolor: true }),
