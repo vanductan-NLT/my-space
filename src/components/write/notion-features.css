@@ -57,10 +57,31 @@
   margin-right: 6px;
 }
 
-/* Narrow headers keep only the page name; the folder is one tap away in the page menu. */
-@media (max-width: 1000px) {
-  .header-breadcrumb .breadcrumb-btn,
-  .header-breadcrumb .breadcrumb-sep {
+.header-breadcrumb .breadcrumb-step {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+}
+
+.header-breadcrumb .breadcrumb-step .breadcrumb-btn {
+  max-width: 160px;
+}
+
+/* The path degrades with the room it really has (not the screen width): first only
+   the direct parent and the page, then just the page. The full path is always in the sidebar. */
+.header-breadcrumb {
+  container-type: inline-size;
+}
+
+@container (max-width: 520px) {
+  .header-breadcrumb .breadcrumb-step:not(.is-parent) {
+    display: none;
+  }
+}
+
+@container (max-width: 250px) {
+  .header-breadcrumb .breadcrumb-step {
     display: none;
   }
 }
@@ -623,5 +644,189 @@
   .documents .folder-row .doc-actions ~ .folder-count,
   .docs-nav-item kbd {
     display: none;
+  }
+}
+
+/* ---------- Nested pages in the sidebar ---------- */
+.page-row {
+  padding-left: calc(min(var(--depth, 0), 8) * 14px);
+}
+
+.page-row .doc-select-btn {
+  padding-left: 2px;
+}
+
+.page-chevron {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.page-chevron:hover {
+  background: var(--row-active);
+  color: var(--text);
+}
+
+/* A page without sub-pages shows its chevron only on hover (it opens to "No pages inside"). */
+.page-chevron.leaf {
+  opacity: 0;
+}
+
+.document-row:hover .page-chevron.leaf,
+.document-row:focus-within .page-chevron.leaf {
+  opacity: 0.6;
+}
+
+/* Two actions (⋯ and +) float over the right edge. */
+.page-row:hover .doc-title,
+.page-row.menu-open .doc-title,
+.page-row:focus-within .doc-title {
+  padding-right: 54px;
+}
+
+.document-row.drop-into {
+  background: var(--mint-soft);
+  box-shadow: inset 0 0 0 1.5px var(--mint);
+}
+
+.page-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.page-children-empty {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding-left: calc(min(var(--depth, 0), 8) * 14px + 32px);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ---------- Page link block ---------- */
+.prose-editor .page-link-block {
+  margin: 2px 0;
+  border-radius: 6px;
+}
+
+.page-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.page-link-btn:hover:not(:disabled) {
+  background: var(--row-hover);
+}
+
+.page-link-icon {
+  flex: none;
+  width: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.page-link-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+}
+
+/* Only while the editor has focus: a page that opens with a link as its first block selects it by default. */
+.prose-editor.ProseMirror-focused .page-link-block.selected {
+  background: var(--mint-soft);
+}
+
+.page-link-block.gone .page-link-btn {
+  color: var(--muted);
+  cursor: default;
+}
+
+.page-link-block.gone .page-link-title {
+  text-decoration: line-through;
+}
+
+.page-link-note {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* ---------- Move to dialog ---------- */
+.move-search {
+  margin-bottom: 10px;
+}
+
+.move-section {
+  padding: 8px 2px 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.move-item-icon {
+  flex: none;
+  width: 18px;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.move-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-item.current {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (pointer: coarse) {
+  .documents .page-row .doc-title {
+    padding-right: 54px;
+  }
+  .page-chevron.leaf {
+    opacity: 0.45;
+  }
+}
+
+/* Phones use 40px touch targets, so the two row actions need more room. */
+@media (max-width: 700px) {
+  .documents .page-row .doc-title {
+    padding-right: 84px;
   }
 }

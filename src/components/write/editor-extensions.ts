@@ -20,6 +20,7 @@ import { FontSize } from './font-size'
 import { ImageNode } from './image-node'
 import { CalloutNode } from './callout-node'
 import { ToggleNode } from './toggle-node'
+import { PageLinkNode } from './page-link-node'
 import { BlockEditingBehaviors } from './block-editing-behaviors'
 
 /** The shared schema used for editing, rich clipboard paste and HTML import. */
@@ -46,6 +47,7 @@ export const writeExtensions = [
   ImageNode,
   CalloutNode,
   ToggleNode,
+  PageLinkNode,
   BlockEditingBehaviors,
   TextStyle,
   Color,

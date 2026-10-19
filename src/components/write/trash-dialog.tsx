@@ -13,6 +13,8 @@ export const TRASH_RETENTION_DAYS = 30
 /**
  * Trash: restore pages or delete them permanently. Deleting forever and
  * emptying the trash both ask once more, since they can't be undone.
+ * `items` are Trash entries; sub-pages trashed with a parent sit inside its
+ * entry (`subPageCount`) and are restored or deleted with it.
  */
 export function TrashDialog({
   items,
@@ -21,8 +23,13 @@ export function TrashDialog({
   onDeleteForever,
   onEmpty,
   onClose,
+  subPageCount = () => 0,
+  total = items.length,
 }: {
   items: LocalDocument[]
+  subPageCount?: (doc: LocalDocument) => number
+  /** Every page in Trash, sub-pages included. */
+  total?: number
   titleOf: (title: string) => string
   onRestore: (doc: LocalDocument) => void
   onDeleteForever: (doc: LocalDocument) => void
@@ -58,7 +65,10 @@ export function TrashDialog({
             <span className="trash-icon">{doc.icon ?? <GoogleIcon name="description" size={16} />}</span>
             <span className="trash-title">
               <strong>{titleOf(doc.title)}</strong>
-              <small>{t('Deleted {when}', { when: doc.deletedAt ? timeAgo(doc.deletedAt) : '' })}</small>
+              <small>
+                {t('Deleted {when}', { when: doc.deletedAt ? timeAgo(doc.deletedAt) : '' })}
+                {subPageCount(doc) > 0 && <> · {t(subPageCount(doc) === 1 ? 'with {n} sub-page' : 'with {n} sub-pages', { n: subPageCount(doc) })}</>}
+              </small>
             </span>
             {confirming === doc.id ? (
               <>
@@ -93,7 +103,7 @@ export function TrashDialog({
                 {t('Cancel')}
               </button>
               <button type="button" className="button danger" onClick={() => { onEmpty(); setConfirming(null) }}>
-                {t('Delete {n} pages forever', { n: items.length })}
+                {t('Delete {n} pages forever', { n: total })}
               </button>
             </>
           ) : (

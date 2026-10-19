@@ -22,7 +22,7 @@ A calm, private workspace for writing, visual thinking, focused work, polished s
 
 ## Routes
 
-- **`/write`** — Notion-style Tiptap editor: page icons, folders and Favorites, Quick Find (`Ctrl/⌘+P`), Trash with restore and Undo (pages are purged after 30 days), toggle lists, a block handle to add, drag, duplicate or delete blocks, `Tab`/`Shift+Tab` indent, `Alt+Shift+↑/↓` to move blocks, full-width pages, autosave, backup/import, statistics, focus mode, and print-to-PDF.
+- **`/write`** — Notion-style Tiptap editor: page icons, nested pages (sub-pages in a sidebar tree, drag a page onto another to nest it, breadcrumb path, `/page` and `@` links between pages), folders and Favorites, Quick Find (`Ctrl/⌘+P`), Trash with restore and Undo (pages are purged after 30 days), toggle lists, a block handle to add, drag, duplicate or delete blocks, `Tab`/`Shift+Tab` indent, `Alt+Shift+↑/↓` to move blocks, full-width pages, autosave, backup/import, statistics, focus mode, and print-to-PDF.
 - **`/create`** — official tldraw SDK with local board management, debounced IndexedDB snapshots, JSON import/export, and tldraw's native image/png/PNG tools.
 - **`/work`** — responsive TanFlow iframe with loading, timeout/error, retry, and safe external-page fallback.
 - **`/frame`** — browser-only screenshot studio with backgrounds, padding, chrome, sizing, copy, and image export.

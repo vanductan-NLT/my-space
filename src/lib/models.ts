@@ -5,8 +5,10 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
  * `font`: page font id (see components/write/fonts.ts); absent = default.
  * `icon`: emoji shown before the title. `fullWidth`: page uses the whole editor width.
  * `deletedAt`: set while the document sits in Trash; absent = live document.
+ * `parentId`: the page this page is nested inside; absent = top-level page. Not
+ * indexed: the whole list is in memory, so the tree is built there (lib/page-tree.ts).
  */
-export type LocalDocument = { id:string; title:string; icon?:string; content:JSONContent; font?:string; createdAt:string; updatedAt:string; version:1; folderId?:string; isPinned?:boolean; fullWidth?:boolean; deletedAt?:string }
+export type LocalDocument = { id:string; title:string; icon?:string; content:JSONContent; font?:string; createdAt:string; updatedAt:string; version:1; folderId?:string; isPinned?:boolean; fullWidth?:boolean; deletedAt?:string; parentId?:string }
 export type LocalBoard = { id:string; title:string; snapshot:unknown; preview?:string; createdAt:string; updatedAt:string; version:1 }
 export type LocalFolder = { id:string; title:string; icon?:string; color?:string; createdAt:string; updatedAt:string; version:1 }
 export type Backup = { format:'my-space-backup'; version:1; exportedAt:string; documents:LocalDocument[]; boards:LocalBoard[]; folders?:LocalFolder[] }

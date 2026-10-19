@@ -1,11 +1,11 @@
 'use client'
 
-import { BubbleMenu, EditorContent, generateJSON, useEditor } from '@tiptap/react'
+import { BubbleMenu, EditorContent, generateHTML, generateJSON, useEditor } from '@tiptap/react'
 import { fontFamily } from './fonts'
 import { InlineFontChips, PageFontButton } from './font-controls'
 import { AlignButtons, BubbleDropdown, ColorPanel, currentBlockLabel, MoreButtons, SizeButtons, TurnInto } from './format-controls'
 import { GoogleIcon } from '../google-icon'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { db, exportBackup, importBackup, isQuotaError, parseBackup } from '@/lib/db'
 import { useAutosave } from '@/lib/use-autosave'
 import { looksLikeMarkdown, markdownToHtml, normalizePastedMarkdown, toMarkdown } from '@/lib/markdown'
@@ -26,6 +26,12 @@ import { QuickFindPalette } from './quick-find-palette'
 import { TrashDialog, TRASH_RETENTION_DAYS } from './trash-dialog'
 import { PageIconPicker } from './page-icon-picker'
 import { BlockHandle } from './block-handle'
+import { PageBreadcrumb } from './page-breadcrumb'
+import { MovePageDialog } from './move-page-dialog'
+import { insertPageLink, withLivePageLinkTitles } from './page-link-node'
+import { PageDirectoryContext, type LinkedPage } from './page-link-view'
+import { ancestorsOf, buildPageTree, rootOf, trashGroupOf, trashRoots } from '@/lib/page-tree'
+import { moveToFolderPatches, nestPatches, pagesInFolder, restorePatches, trashPatches, type DocPatch } from '@/lib/page-tree-operations'
 import { EMPTY_CONTENT, newDocument, newFolder, type LocalDocument, type LocalFolder, type SaveState } from '@/lib/models'
 import { detectLang, getLang, rich, translate, useI18n } from '@/lib/i18n'
 import './write.css'
@@ -64,6 +70,9 @@ export default function WritingWorkspace() {
   const [iconPickerOpen, setIconPickerOpen] = useState(false)
   const [folders, setFolders] = useState<LocalFolder[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set())
+  // "Link to page" picker; `at` is where a typed "@" opened it (removed when a page is picked).
+  const [linkPicker, setLinkPicker] = useState<{ at?: number } | null>(null)
   const [folderToRename, setFolderToRename] = useState<LocalFolder | null>(null)
   const [renameFolderTitle, setRenameFolderTitle] = useState('')
   const [movingDocId, setMovingDocId] = useState<string | null>(null)
@@ -101,7 +110,12 @@ export default function WritingWorkspace() {
     return () => clearTimeout(t)
   }, [notice])
   const active = docs.find(d => d.id === activeId)
-  const activeFolder = active?.folderId ? folders.find(f => f.id === active.folderId) : undefined
+  const tree = useMemo(() => buildPageTree(docs), [docs])
+  const ancestors = useMemo(() => (active ? ancestorsOf(tree, active.id) : []), [tree, active])
+  // A sub-page lives wherever its top-level page is filed.
+  const activeRoot = active ? rootOf(tree, active.id) : undefined
+  const activeFolder = activeRoot?.folderId ? folders.find(f => f.id === activeRoot.folderId) : undefined
+  const trashEntries = useMemo(() => trashRoots(trash), [trash])
 
   const autosave = useAutosave<Partial<Pick<LocalDocument, 'title' | 'content' | 'font' | 'icon' | 'fullWidth'>>>({
     delay: 650,
@@ -235,6 +249,16 @@ export default function WritingWorkspace() {
 
           return false
         },
+        handleTextInput: (view, from, _to, text) => {
+          // "@" at the start of a word opens the page picker, like Notion's page mention.
+          if (text !== '@') return false
+          const $from = view.state.doc.resolve(from)
+          if ($from.parent.type.name === 'codeBlock') return false
+          const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 1), $from.parentOffset, undefined, '\ufffc')
+          if (before && !/\s/.test(before)) return false
+          setTimeout(() => setLinkPicker({ at: from }), 0)
+          return false
+        },
         handleDrop: (view, event, _slice, moved) => {
           const files = [...(event.dataTransfer?.files ?? [])].filter(isImageFile)
           if (moved || !files.length) return false
@@ -284,6 +308,27 @@ export default function WritingWorkspace() {
     if (id === activeId) return
     void autosave.flush()
     setActiveId(id)
+  }
+
+  /** Expands the sidebar down to a page: its folder and every parent page. */
+  const revealPage = (id: string) => {
+    const chain = ancestorsOf(tree, id)
+    if (chain.length) setExpandedPages(prev => new Set([...prev, ...chain.map(a => a.id)]))
+    const folderId = (chain[0] ?? tree.byId.get(id))?.folderId
+    if (folderId) setExpandedFolders(prev => new Set(prev).add(folderId))
+  }
+
+  /** Opens a page from a link, the breadcrumb or Quick Find, and shows it in the sidebar. */
+  const openPage = (id: string) => {
+    selectDocument(id)
+    revealPage(id)
+  }
+
+  const applyPatches = async (patches: DocPatch[], touchedId?: string) => {
+    const updatedAt = new Date().toISOString()
+    await db.transaction('rw', db.documents, async () => {
+      for (const { id, patch } of patches) await db.documents.update(id, id === touchedId ? { ...patch, updatedAt } : patch)
+    })
   }
 
   // Link Dialog open helper
@@ -339,16 +384,58 @@ export default function WritingWorkspace() {
     setNotice({ text: t('Created folder "{title}"', { title: f.title }) })
   }
 
-  const create = async (folderId?: string, title?: string) => {
+  /**
+   * New page: top-level (optionally in a folder) or, with `parentId`, a
+   * sub-page filed with its parent. `preset` supplies a page whose id is
+   * already linked from the editor. `open: false` stays on the current page.
+   */
+  const create = async ({ folderId, title, parentId, preset, open = true }: { folderId?: string; title?: string; parentId?: string; preset?: LocalDocument; open?: boolean } = {}) => {
     await autosave.flush()
-    const d = { ...newDocument(title || t('Untitled document')), folderId }
+    const parent = parentId ? tree.byId.get(parentId) : undefined
+    const base = preset ?? newDocument(title || t('Untitled document'))
+    const d: LocalDocument = parent ? { ...base, parentId: parent.id, folderId: rootOf(tree, parent.id)?.folderId } : { ...base, folderId }
     await db.documents.add(d)
-    if (folderId) {
-      setExpandedFolders(prev => new Set(prev).add(folderId))
+    if (d.folderId) setExpandedFolders(prev => new Set(prev).add(d.folderId!))
+    if (parent) {
+      setExpandedPages(prev => new Set(prev).add(parent.id))
+      revealPage(parent.id)
     }
+    if (!open) return refresh(activeId)
     if (isNarrow()) setSidebar(false)
     focusTitleNext.current = !title
     await refresh(d.id)
+  }
+
+  /** Puts a link block to `pageId` at the caret (replacing a typed "@" that opened the picker). */
+  const insertLinkTo = (pageId: string, title: string) => {
+    if (!editor) return
+    const at = linkPicker?.at
+    if (at !== undefined && at + 1 <= editor.state.doc.content.size && editor.state.doc.textBetween(at, at + 1) === '@') {
+      editor.view.dispatch(editor.state.tr.delete(at, at + 1))
+    }
+    const tr = insertPageLink(editor.state, { pageId, title })
+    if (tr) editor.view.dispatch(tr)
+    editor.commands.focus()
+  }
+
+  /** "/page": a new sub-page, linked from where the caret is, then opened. */
+  const addSubpageBlock = async () => {
+    if (!active) return
+    const d = newDocument(t('Untitled document'))
+    insertLinkTo(d.id, '')
+    await create({ parentId: active.id, preset: d })
+  }
+
+  const nestPage = async (docId: string, parentId: string) => {
+    const patches = nestPatches(tree, docId, parentId)
+    if (!patches) return
+    await applyPatches(patches, docId)
+    setExpandedPages(prev => new Set(prev).add(parentId))
+    revealPage(parentId)
+    await refresh(activeId)
+    const doc = tree.byId.get(docId)
+    const parent = tree.byId.get(parentId)
+    if (doc && parent) setNotice({ text: t('Moved "{title}" into "{parent}"', { title: titleOf(doc.title), parent: titleOf(parent.title) }) })
   }
 
   const patchActive = (patch: Partial<Pick<LocalDocument, 'icon' | 'fullWidth'>>) => {
@@ -358,7 +445,7 @@ export default function WritingWorkspace() {
   }
 
   const moveToFolder = async (docId: string, folderId?: string) => {
-    await db.documents.update(docId, { folderId, updatedAt: new Date().toISOString() })
+    await applyPatches(moveToFolderPatches(tree, docId, folderId), docId)
     if (folderId) setExpandedFolders(prev => new Set(prev).add(folderId))
     await refresh(activeId)
     const doc = docs.find(d => d.id === docId)
@@ -366,23 +453,38 @@ export default function WritingWorkspace() {
     if (doc) setNotice({ text: t('Moved "{title}" to "{folder}"', { title: titleOf(doc.title), folder: folder?.title ?? t('Pages') }) })
   }
 
-  /** Soft delete: the page goes to Trash and can be restored (or undone right away). */
+  /** Soft delete: the page and its sub-pages go to Trash and can be restored (or undone right away). */
   const moveToTrash = async (d: LocalDocument) => {
     await autosave.flush()
-    await db.documents.update(d.id, { deletedAt: new Date().toISOString() })
-    const next = d.id === activeId ? docs.find(x => x.id !== d.id)?.id : activeId
+    const patches = trashPatches(tree, d.id, new Date().toISOString())
+    await applyPatches(patches)
+    const gone = new Set(patches.map(p => p.id))
+    const next = gone.has(activeId) ? (tree.parent.get(d.id) ?? docs.find(x => !gone.has(x.id))?.id) : activeId
     await refresh(next)
-    setNotice({ text: t('Moved "{title}" to Trash', { title: titleOf(d.title) }), action: { label: t('Undo'), run: () => void restore(d, true) } })
+    const n = patches.length - 1
+    setNotice({
+      text: n
+        ? t(n === 1 ? 'Moved "{title}" and {n} sub-page to Trash' : 'Moved "{title}" and {n} sub-pages to Trash', { title: titleOf(d.title), n })
+        : t('Moved "{title}" to Trash', { title: titleOf(d.title) }),
+      action: { label: t('Undo'), run: () => void restore(d, true) },
+    })
   }
 
   const restore = async (d: LocalDocument, open = false) => {
-    // A page whose folder was deleted meanwhile comes back as a loose page.
-    const folderId = d.folderId && (await db.folders.get(d.folderId)) ? d.folderId : undefined
-    await db.documents.update(d.id, { deletedAt: undefined, folderId })
+    // Read fresh: an Undo holds the page as it was before it went to Trash.
+    const all = await db.documents.toArray()
+    const doc = all.find(x => x.id === d.id)
+    if (!doc?.deletedAt) return
+    const folderIds = new Set((await db.folders.toArray()).map(f => f.id))
+    await applyPatches(restorePatches(all, doc, id => folderIds.has(id)))
+    if (doc.parentId) setExpandedPages(prev => new Set(prev).add(doc.parentId!))
     await refresh(open ? d.id : activeId || d.id)
     if (!open) setNotice({ text: t('Restored "{title}"', { title: titleOf(d.title) }) })
     else setNotice(null)
   }
+
+  /** Deleting a Trash entry forever also deletes the sub-pages trashed with it. */
+  const deleteEntryForever = (d: LocalDocument) => deleteForever(trashGroupOf(trash, d).map(x => x.id))
 
   const deleteForever = async (ids: string[]) => {
     await db.documents.bulkDelete(ids)
@@ -412,7 +514,7 @@ export default function WritingWorkspace() {
   const handleSafeDeleteFolder = async () => {
     if (!folderToDelete) return
     const f = folderToDelete
-    const docsInFolder = docs.filter(d => d.folderId === f.id)
+    const docsInFolder = pagesInFolder(tree, f.id)
 
     if (deleteWithDocs) {
       // Notes go to Trash rather than vanishing, so a mis-click is recoverable.
@@ -523,21 +625,36 @@ export default function WritingWorkspace() {
   }
 
   const textOf = useCallback((d: LocalDocument) => plainText(d.content), [])
+  const parentTitleOf = (d: LocalDocument) => {
+    const parent = tree.byId.get(tree.parent.get(d.id) ?? '')
+    return parent ? titleOf(parent.title) : undefined
+  }
+  // Page-link blocks read titles and icons from here, so a rename shows up in every link at once.
+  const pageDirectory = {
+    lookup: (id: string): LinkedPage => {
+      const d = tree.byId.get(id)
+      if (d) return { title: titleOf(d.title), icon: d.icon, status: 'live' }
+      return { title: '', status: trash.some(x => x.id === id) ? 'trash' : 'missing' }
+    },
+    open: openPage,
+  }
   const words = plainText(active?.content).trim().split(/\s+/).filter(Boolean).length
   const chars = plainText(active?.content).length
 
   const exportActive = (format: string) => {
     if (!active || !editor || !format) return
+    // Exports carry each linked page's current title, not the one it had when linked.
+    const json = withLivePageLinkTitles(editor.getJSON(), id => (tree.byId.has(id) ? titleOf(tree.byId.get(id)!.title) : undefined))
     const safe = titleOf(active.title).replace(/[^\p{L}\p{N}\-_ ]/gu, '').trim() || 'document'
     if (format === 'html') {
       const font = fontFamily(active.font)
-      download(`${safe}.html`, `<!doctype html><meta charset="utf-8"><title>${safe}</title><article${font ? ` style="font-family: ${font.replace(/"/g, "'")}"` : ''}>${editor.getHTML()}</article>`, 'text/html')
+      download(`${safe}.html`, `<!doctype html><meta charset="utf-8"><title>${safe}</title><article${font ? ` style="font-family: ${font.replace(/"/g, "'")}"` : ''}>${generateHTML(json, writeExtensions)}</article>`, 'text/html')
     }
     if (format === 'txt') {
       download(`${safe}.txt`, editor.getText(), 'text/plain')
     }
     if (format === 'md') {
-      download(`${safe}.md`, toMarkdown(editor.getJSON()), 'text/markdown')
+      download(`${safe}.md`, toMarkdown(json), 'text/markdown')
     }
   }
 
@@ -553,9 +670,10 @@ export default function WritingWorkspace() {
     <div className={`writing ${sidebar ? '' : 'sidebar-hidden'} ${focus ? 'focus' : ''}`}>
       <DocumentSidebar
         docs={docs}
+        tree={tree}
         folders={folders}
         activeId={activeId}
-        trashCount={trash.length}
+        trashCount={trashEntries.length}
         titleOf={titleOf}
         textOf={textOf}
         expandedFolders={expandedFolders}
@@ -567,8 +685,19 @@ export default function WritingWorkspace() {
             return next
           })
         }
+        expandedPages={expandedPages}
+        onTogglePage={id =>
+          setExpandedPages(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+          })
+        }
         onSelect={selectDocument}
-        onCreate={folderId => void create(folderId)}
+        onCreate={folderId => void create({ folderId })}
+        onCreateSubpage={parentId => void create({ parentId })}
+        onNest={(id, parentId) => void nestPage(id, parentId)}
         onNewFolder={() => {
           setNewFolderName('')
           setNewFolderOpen(true)
@@ -582,7 +711,7 @@ export default function WritingWorkspace() {
           setDeleteWithDocs(false)
         }}
         onMoveToFolder={(id, folderId) => void moveToFolder(id, folderId)}
-        onPickFolder={setMovingDocId}
+        onPickDestination={setMovingDocId}
         onTogglePin={d => void togglePin(d)}
         onDuplicate={d => void duplicate(d)}
         onTrash={d => void moveToTrash(d)}
@@ -614,17 +743,7 @@ export default function WritingWorkspace() {
           </button>
 
           {active && (
-            <nav className="header-breadcrumb" aria-label={t('Location')}>
-              <button type="button" className="breadcrumb-btn" onClick={() => setMovingDocId(active.id)} title={t('Move to folder')}>
-                <GoogleIcon name={activeFolder ? 'folder' : 'description'} size={15} />
-                <span>{activeFolder ? activeFolder.title : t('Pages')}</span>
-              </button>
-              <span className="breadcrumb-sep">/</span>
-              <span className="breadcrumb-current">
-                {active.icon && <span className="breadcrumb-emoji">{active.icon}</span>}
-                {titleOf(active.title)}
-              </span>
-            </nav>
+            <PageBreadcrumb page={active} ancestors={ancestors} folder={activeFolder} titleOf={titleOf} onOpen={openPage} onMove={() => setMovingDocId(active.id)} />
           )}
 
           <SaveIndicator state={save} />
@@ -658,7 +777,7 @@ export default function WritingWorkspace() {
                   { label: t('Full width'), icon: <GoogleIcon name="width_full" size={16} />, checked: !!active.fullWidth, onSelect: () => patchActive({ fullWidth: !active.fullWidth }) },
                   { label: active.isPinned ? t('Remove from Favorites') : t('Add to Favorites'), icon: <GoogleIcon name="star" size={16} fill={active.isPinned} />, onSelect: () => void togglePin(active) },
                   { label: t('Duplicate'), icon: <GoogleIcon name="content_copy" size={16} />, onSelect: () => void duplicate(active) },
-                  { label: t('Move to folder'), icon: <GoogleIcon name="drive_file_move" size={16} />, onSelect: () => setMovingDocId(active.id) },
+                  { label: t('Move to'), icon: <GoogleIcon name="drive_file_move" size={16} />, onSelect: () => setMovingDocId(active.id) },
                   'separator',
                   { label: t('Export as Markdown'), hint: '.md', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('md') },
                   { label: t('Export as plain text'), hint: '.txt', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('txt') },
@@ -813,12 +932,14 @@ export default function WritingWorkspace() {
                     <Tool label={t('Delete table')} click={() => editor.chain().focus().deleteTable().run()} icon={<GoogleIcon name="close" size={17} />} />
                   </BubbleMenu>
 
-                  <SlashMenu editor={editor} onPickImage={() => imageFileRef.current?.click()} />
+                  <SlashMenu editor={editor} onPickImage={() => imageFileRef.current?.click()} onAddSubpage={() => void addSubpageBlock()} onLinkPage={() => setLinkPicker({})} />
                   <BlockHandle editor={editor} />
                 </>
               )}
 
-              <EditorContent editor={editor} />
+              <PageDirectoryContext.Provider value={pageDirectory}>
+                <EditorContent editor={editor} />
+              </PageDirectoryContext.Provider>
               <div className="editor-tail" aria-hidden="true" />
 
               <footer className="document-stats">
@@ -830,7 +951,7 @@ export default function WritingWorkspace() {
           ) : (
             <div className="empty">
               <h2>{t('No documents found')}</h2>
-              <button className="button primary" onClick={() => create(undefined)}>
+              <button className="button primary" onClick={() => void create()}>
                 {t('Create a document')}
               </button>
             </div>
@@ -910,7 +1031,7 @@ export default function WritingWorkspace() {
             {rich(t('Are you sure you want to delete folder **“{title}”**?', { title: folderToDelete.title }))}
           </p>
 
-          {docs.filter(d => d.folderId === folderToDelete.id).length > 0 && (
+          {pagesInFolder(tree, folderToDelete.id).length > 0 && (
             <div className="delete-options-list">
               <label className={`delete-option-card ${!deleteWithDocs ? 'active' : ''}`}>
                 <input
@@ -921,7 +1042,7 @@ export default function WritingWorkspace() {
                 />
                 <div className="delete-option-info">
                   <strong>{t('Delete folder only')}</strong>
-                  <small>{t('Keep its {n} pages; they move to Pages.', { n: docs.filter(d => d.folderId === folderToDelete.id).length })}</small>
+                  <small>{t('Keep its {n} pages; they move to Pages.', { n: pagesInFolder(tree, folderToDelete.id).length })}</small>
                 </div>
               </label>
 
@@ -934,7 +1055,7 @@ export default function WritingWorkspace() {
                 />
                 <div className="delete-option-info">
                   <strong style={{ color: 'var(--danger)' }}>{t('Delete folder and notes')}</strong>
-                  <small>{t('Move the folder’s {n} pages to Trash (restorable for {days} days).', { n: docs.filter(d => d.folderId === folderToDelete.id).length, days: TRASH_RETENTION_DAYS })}</small>
+                  <small>{t('Move the folder’s {n} pages to Trash (restorable for {days} days).', { n: pagesInFolder(tree, folderToDelete.id).length, days: TRASH_RETENTION_DAYS })}</small>
                 </div>
               </label>
             </div>
@@ -981,41 +1102,26 @@ export default function WritingWorkspace() {
         </Modal>
       )}
 
-      {/* Move Document Modal */}
       {movingDocId && (
-        <Modal title={t('Move to folder')} onClose={() => setMovingDocId(null)}>
-          <div className="move-modal-list">
-            <button
-              className="button move-item"
-              onClick={() => {
-                void moveToFolder(movingDocId)
-                setMovingDocId(null)
-              }}
-            >
-              <GoogleIcon name="description" size={18} /> {t('Pages (no folder)')}
-            </button>
-            {folders.map(f => (
-              <button
-                key={f.id}
-                className="button move-item"
-                onClick={() => {
-                  void moveToFolder(movingDocId, f.id)
-                  setMovingDocId(null)
-                }}
-              >
-                <GoogleIcon name="folder" size={18} /> {f.title}
-              </button>
-            ))}
-          </div>
-        </Modal>
+        <MovePageDialog
+          docId={movingDocId}
+          tree={tree}
+          folders={folders}
+          titleOf={titleOf}
+          onMoveToFolder={folderId => void moveToFolder(movingDocId, folderId)}
+          onNest={parentId => void nestPage(movingDocId, parentId)}
+          onClose={() => setMovingDocId(null)}
+        />
       )}
 
       {trashOpen && (
         <TrashDialog
-          items={trash}
+          items={trashEntries}
+          total={trash.length}
+          subPageCount={d => trashGroupOf(trash, d).length - 1}
           titleOf={titleOf}
           onRestore={d => void restore(d)}
-          onDeleteForever={d => void deleteForever([d.id])}
+          onDeleteForever={d => void deleteEntryForever(d)}
           onEmpty={() => void deleteForever(trash.map(d => d.id))}
           onClose={() => setTrashOpen(false)}
         />
@@ -1027,14 +1133,33 @@ export default function WritingWorkspace() {
           folders={folders}
           titleOf={titleOf}
           textOf={textOf}
-          onOpen={id => {
-            selectDocument(id)
-            if (focus) return
-            const doc = docs.find(d => d.id === id)
-            if (doc?.folderId) setExpandedFolders(prev => new Set(prev).add(doc.folderId!))
-          }}
-          onCreate={title => void create(undefined, title)}
+          pathOf={parentTitleOf}
+          onOpen={openPage}
+          onCreate={title => void create({ title })}
           onClose={() => setQuickFindOpen(false)}
+        />
+      )}
+
+      {linkPicker && active && (
+        <QuickFindPalette
+          docs={docs}
+          folders={folders}
+          titleOf={titleOf}
+          textOf={textOf}
+          pathOf={parentTitleOf}
+          excludeId={active.id}
+          placeholder="Link to a page…"
+          createLabel="New sub-page “{title}”"
+          onOpen={id => insertLinkTo(id, titleOf(tree.byId.get(id)?.title ?? ''))}
+          onCreate={title => {
+            const d = newDocument(title)
+            insertLinkTo(d.id, title)
+            void create({ parentId: active.id, preset: d, title, open: false })
+          }}
+          onClose={() => {
+            setLinkPicker(null)
+            editor?.commands.focus()
+          }}
         />
       )}
 
