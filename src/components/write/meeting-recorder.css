@@ -1,0 +1,288 @@
+/* Meeting recording: setup dialog, floating bar, header chip. */
+
+.meeting-intro {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--secondary);
+}
+
+.meeting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.meeting-segment {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--surface-hi);
+}
+
+.meeting-segment button {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.meeting-segment button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.meeting-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.meeting-check:hover {
+  border-color: var(--border-strong);
+}
+
+.meeting-check:has(input:checked) {
+  border-color: var(--mint-border);
+  background: var(--mint-soft);
+}
+
+.meeting-check.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.meeting-check input {
+  margin-top: 3px;
+  accent-color: var(--mint);
+}
+
+.meeting-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meeting-check strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.meeting-check small {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.meeting-field + .meeting-check {
+  margin-bottom: 12px;
+}
+
+.meeting-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-hi);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--secondary);
+}
+
+.meeting-tips div {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.meeting-tips .material-symbols-outlined {
+  flex: none;
+  margin-top: 1px;
+  color: var(--mint);
+}
+
+.meeting-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.meeting-privacy .material-symbols-outlined {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ---------- Recording indicator ---------- */
+.meeting-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+  animation: meeting-pulse 1.6s ease-out infinite;
+}
+
+.meeting-bar.paused .meeting-dot {
+  background: var(--muted);
+  animation: none;
+}
+
+@keyframes meeting-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meeting-dot {
+    animation: none;
+  }
+}
+
+.meeting-header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--text);
+  font: 600 12.5px 'JetBrains Mono', ui-monospace, monospace;
+  cursor: pointer;
+}
+
+/* ---------- Floating bar ---------- */
+.meeting-bar {
+  position: fixed;
+  z-index: 900;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 24px));
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.15s ease;
+}
+
+.meeting-bar-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.meeting-bar-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.meeting-bar-status strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.meeting-time {
+  font: 600 13px 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--secondary);
+}
+
+.meeting-bar-status small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.meeting-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.meeting-stop {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.meeting-stop:hover {
+  background: #dc2626;
+}
+
+.meeting-stop:disabled,
+.meeting-bar .icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.meeting-interim {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--secondary);
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meeting-warning {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #f59e0b;
+}
+
+/* Phones: sit above the bottom navigation. */
+@media (max-width: 700px) {
+  .meeting-bar {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+}
+
+@media print {
+  .meeting-bar {
+    display: none;
+  }
+}

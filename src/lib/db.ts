@@ -1,11 +1,18 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Backup, LocalBoard, LocalDocument, LocalFolder } from './models'
+import type { Backup, LocalBoard, LocalDocument, LocalFolder, LocalRecording, RecordingChunk } from './models'
 
 export class WorkspaceDB extends Dexie {
   documents!:EntityTable<LocalDocument,'id'>
   boards!:EntityTable<LocalBoard,'id'>
   folders!:EntityTable<LocalFolder,'id'>
-  constructor(name='my-space') { super(name); this.version(2).stores({ documents:'id,updatedAt,title,folderId',boards:'id,updatedAt,title',folders:'id,updatedAt,title' }).upgrade(() => {}) } // Dexie upgrade for new fields and tables
+  recordings!:EntityTable<LocalRecording,'id'>
+  recordingChunks!:Dexie.Table<RecordingChunk,[string,number]>
+  constructor(name='my-space') {
+    super(name)
+    this.version(2).stores({ documents:'id,updatedAt,title,folderId',boards:'id,updatedAt,title',folders:'id,updatedAt,title' }).upgrade(() => {}) // Dexie upgrade for new fields and tables
+    // Meeting audio: recordings belong to a transcript page; chunks are keyed by recording + order.
+    this.version(3).stores({ recordings:'id,docId,startedAt',recordingChunks:'[recordingId+seq],recordingId' })
+  }
 }
 export const db = new WorkspaceDB()
 export async function exportBackup():Promise<Backup>{ return {format:'my-space-backup',version:1,exportedAt:new Date().toISOString(),documents:await db.documents.toArray(),boards:await db.boards.toArray(),folders:await db.folders.toArray()} }

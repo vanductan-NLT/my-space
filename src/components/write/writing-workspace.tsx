@@ -15,6 +15,10 @@ import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model'
 import { writeExtensions } from './editor-extensions'
 import { SlashMenu } from './slash-menu'
 import { Dictation } from './dictation'
+import { MeetingRecorderBar, MeetingSetupDialog, downloadRecording, useDocRecordings, useMeetingSnapshot } from './meeting-recorder'
+import { appendToStoredDoc, meetingSession } from '@/lib/meeting-session'
+import { deleteRecordingsForDocs } from '@/lib/meeting-recording-store'
+import { formatElapsed } from '@/lib/transcript-format'
 import { CaptureScreenButton } from '../screen-capture'
 import { KeyboardBar } from './keyboard-bar'
 import { NodeSelection } from '@tiptap/pm/state'
@@ -59,7 +63,7 @@ const mod = () => (/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+')
 const isNarrow = () => window.matchMedia('(max-width: 700px)').matches
 
 export default function WritingWorkspace() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   // Untitled documents keep the default name in whatever language is shown.
   const titleOf = (title: string) => (!title || title === 'Untitled document' || title === 'Tài liệu chưa đặt tên' ? t('Untitled document') : title)
   const [docs, setDocs] = useState<LocalDocument[]>([])
@@ -278,6 +282,46 @@ export default function WritingWorkspace() {
     [activeId, contentVersion]
   )
 
+  // ---- Meeting recording: live transcript lines go into the open editor when it shows the meeting page.
+  const meeting = useMeetingSnapshot()
+  const [meetingSetupOpen, setMeetingSetupOpen] = useState(false)
+  const [recordingsVersion, setRecordingsVersion] = useState(0)
+  const activeRecordings = useDocRecordings(active?.id, recordingsVersion)
+  const editorRef = useRef(editor)
+  editorRef.current = editor
+  const activeIdRef = useRef(activeId)
+  activeIdRef.current = activeId
+  const lastMeeting = useRef({ state: meeting.state, lines: 0, elapsedMs: 0, docId: null as string | null })
+
+  useEffect(() => {
+    meetingSession.setSink(async (docId, blocks) => {
+      const ed = editorRef.current
+      if (ed && !ed.isDestroyed && activeIdRef.current === docId) {
+        // Keep the trailing empty line (where the user may be typing notes) below the transcript.
+        const last = ed.state.doc.lastChild
+        const at = last && last.type.name === 'paragraph' && !last.content.size ? ed.state.doc.content.size - last.nodeSize : ed.state.doc.content.size
+        ed.commands.insertContentAt(at, blocks, { updateSelection: false })
+        return
+      }
+      await appendToStoredDoc(docId, blocks)
+      const fresh = await db.documents.get(docId)
+      if (fresh) setDocs(v => v.map(d => (d.id === docId ? { ...d, content: fresh.content, updatedAt: fresh.updatedAt } : d)))
+    })
+    return () => meetingSession.setSink(null)
+  }, [])
+
+  // Errors on start, and a summary once a meeting is saved.
+  useEffect(() => {
+    const prev = lastMeeting.current
+    if (meeting.error && prev.state === 'starting') setNotice({ text: t(meeting.error), error: true })
+    if (prev.state === 'stopping' && meeting.state === 'idle' && prev.docId) {
+      setRecordingsVersion(v => v + 1)
+      setNotice({ text: t('Meeting saved: {n} lines, {time}.', { n: prev.lines, time: formatElapsed(prev.elapsedMs) }) })
+    }
+    lastMeeting.current = { state: meeting.state, lines: meeting.lines, elapsedMs: meeting.elapsedMs, docId: meeting.docId }
+  }, [meeting, t])
+
+
   useEffect(() => {
     if (activeId) localStorage.setItem('my-space:last-document', activeId)
   }, [activeId])
@@ -406,6 +450,30 @@ export default function WritingWorkspace() {
     await refresh(d.id)
   }
 
+  const startMeeting = (settings: { lang: string; mic: boolean; meeting: boolean; saveAudio: boolean }) => {
+    setMeetingSetupOpen(false)
+    const when = new Date().toLocaleString(lang === 'vi' ? 'vi-VN' : undefined, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
+    void meetingSession.start({
+      ...settings,
+      createDoc: async () => {
+        const d = newDocument(t('Meeting {when}', { when }), '🎙️')
+        d.content = {
+          type: 'doc',
+          content: [
+            {
+              type: 'callout',
+              attrs: { icon: '🎙️' },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: t('Recorded {when}. Transcribed live by the browser; edit freely.', { when }) }] }],
+            },
+            { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t('Transcript') }] },
+          ],
+        }
+        await create({ preset: d, title: d.title })
+        return d.id
+      },
+    })
+  }
+
   /** Puts a link block to `pageId` at the caret (replacing a typed "@" that opened the picker). */
   const insertLinkTo = (pageId: string, title: string) => {
     if (!editor) return
@@ -488,6 +556,7 @@ export default function WritingWorkspace() {
 
   const deleteForever = async (ids: string[]) => {
     await db.documents.bulkDelete(ids)
+    await deleteRecordingsForDocs(ids).catch(() => undefined)
     await refresh(activeId)
   }
 
@@ -764,6 +833,22 @@ export default function WritingWorkspace() {
               onError={text => setNotice({ text, error: true })}
             />
 
+            {meeting.state === 'idle' ? (
+              <button type="button" className="icon-button" onClick={() => setMeetingSetupOpen(true)} title={t('Record a meeting')} aria-label={t('Record a meeting')}>
+                <GoogleIcon name="graphic_eq" size={20} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="meeting-header-chip"
+                onClick={() => meeting.docId && selectDocument(meeting.docId)}
+                title={t('Open transcript')}
+              >
+                <span className="meeting-dot" aria-hidden="true" />
+                {formatElapsed(meeting.elapsedMs)}
+              </button>
+            )}
+
             <Dictation editor={editor} onError={text => setNotice({ text, error: true })} />
 
             <FullModeButton kind="focus" />
@@ -783,6 +868,12 @@ export default function WritingWorkspace() {
                   { label: t('Export as plain text'), hint: '.txt', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('txt') },
                   { label: t('Export as web page'), hint: '.html', icon: <GoogleIcon name="download" size={16} />, onSelect: () => exportActive('html') },
                   { label: t('Print or save as PDF'), icon: <GoogleIcon name="print" size={16} />, onSelect: () => window.print() },
+                  ...activeRecordings.map(r => ({
+                    label: t('Download meeting audio'),
+                    hint: formatElapsed(r.durationMs),
+                    icon: <GoogleIcon name="audio_file" size={16} />,
+                    onSelect: () => void downloadRecording(r, titleOf(active.title)).catch(() => setNotice({ text: t('The audio file could not be read.'), error: true })),
+                  })),
                   'separator',
                   { label: t('Move to Trash'), icon: <GoogleIcon name="delete" size={16} />, danger: true, onSelect: () => void moveToTrash(active) },
                 ]}
@@ -1113,6 +1204,9 @@ export default function WritingWorkspace() {
           onClose={() => setMovingDocId(null)}
         />
       )}
+
+      {meetingSetupOpen && <MeetingSetupDialog onStart={startMeeting} onClose={() => setMeetingSetupOpen(false)} />}
+      <MeetingRecorderBar activeId={activeId} onOpenDoc={selectDocument} />
 
       {trashOpen && (
         <TrashDialog

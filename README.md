@@ -23,6 +23,7 @@ A calm, private workspace for writing, visual thinking, focused work, polished s
 ## Routes
 
 - **`/write`** — Notion-style Tiptap editor: page icons, nested pages (sub-pages in a sidebar tree, drag a page onto another to nest it, breadcrumb path, `/page` and `@` links between pages), folders and Favorites, Quick Find (`Ctrl/⌘+P`), Trash with restore and Undo (pages are purged after 30 days), toggle lists, a block handle to add, drag, duplicate or delete blocks, `Tab`/`Shift+Tab` indent, `Alt+Shift+↑/↓` to move blocks, full-width pages, autosave, backup/import, statistics, focus mode, and print-to-PDF.
+  - **Meeting transcripts** — the 🎙 button records a whole meeting into a new page with elapsed-time stamps and no time limit. It listens to your microphone and, on desktop Chrome/Edge, to the meeting itself: share the Google Meet tab with “Share tab audio”, or the entire screen with “Share system audio” for the Zoom app. Text comes from the browser's speech service (Google in Chrome, Microsoft in Edge), which restarts automatically; the audio file is saved in IndexedDB as it records and can be downloaded from the page menu.
 - **`/create`** — official tldraw SDK with local board management, debounced IndexedDB snapshots, JSON import/export, and tldraw's native image/png/PNG tools.
 - **`/work`** — responsive TanFlow iframe with loading, timeout/error, retry, and safe external-page fallback.
 - **`/frame`** — browser-only screenshot studio with backgrounds, padding, chrome, sizing, copy, and image export.
