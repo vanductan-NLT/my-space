@@ -49,6 +49,9 @@ const block = (node: JSONContent): string => {
       return `![${node.attrs?.alt ?? ''}](${node.attrs?.src ?? ''})`
     case 'horizontalRule':
       return '---'
+    case 'pageLink':
+      // Links between pages only work inside My Space; elsewhere the title stays readable.
+      return `📄 ${node.attrs?.title || 'Untitled'}`
     case 'bulletList':
       return children.map(item => `- ${indent(children2md(item), '  ')}`).join('\n')
     case 'orderedList': {

@@ -38,7 +38,19 @@ const ITEMS: Item[] = [
 
 type Open = { from: number; to: number; query: string; left: number; top: number; above: boolean }
 
-export function SlashMenu({ editor, onPickImage }: { editor: Editor; onPickImage: () => void }) {
+export function SlashMenu({
+  editor,
+  onPickImage,
+  onAddSubpage,
+  onLinkPage,
+}: {
+  editor: Editor
+  onPickImage: () => void
+  /** "Page": create a sub-page of this page and insert a link block to it. */
+  onAddSubpage: () => void
+  /** "Link to page": pick an existing page and insert a link block to it. */
+  onLinkPage: () => void
+}) {
   const [open, setOpen] = useState<Open | null>(null)
   const [index, setIndex] = useState(0)
   const dismissedAt = useRef<number | null>(null)
@@ -46,7 +58,10 @@ export function SlashMenu({ editor, onPickImage }: { editor: Editor; onPickImage
   const { t } = useI18n()
 
   const items: Item[] = [
-    ...ITEMS,
+    ITEMS[0],
+    { category: 'Basic blocks', title: 'Page', hint: 'Add a sub-page inside this page', keywords: 'page subpage sub-page child nested trang con trang moi', icon: <GoogleIcon name="note_add" size={18} />, run: () => onAddSubpage() },
+    { category: 'Basic blocks', title: 'Link to page', hint: 'Link to an existing page', keywords: 'link page mention reference lien ket trang', icon: <GoogleIcon name="link" size={18} />, run: () => onLinkPage() },
+    ...ITEMS.slice(1),
     { category: 'Advanced blocks', title: 'Image', hint: 'Upload or paste', keywords: 'image picture photo img upload hinh anh', icon: <GoogleIcon name="image" size={18} />, run: () => onPickImage() },
   ]
   const q = open?.query.toLowerCase() ?? ''

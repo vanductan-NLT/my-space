@@ -4,17 +4,21 @@ import { useState } from 'react'
 import { GoogleIcon } from '../google-icon'
 import { MenuButton } from '../menu-button'
 import { useI18n } from '@/lib/i18n'
-import { timeAgo } from '@/lib/time'
+import type { PageTree } from '@/lib/page-tree'
 import type { LocalDocument, LocalFolder } from '@/lib/models'
+import { DOC_DRAG_TYPE, SidebarPageRow, type PageRowShared } from './sidebar-page-row'
 
 /*
  * Notion-style page list: Favorites (pinned pages), folders, then loose pages.
- * Rows are one line (icon + title); actions live in a "⋯" menu that appears on
- * hover so they never squeeze the title. Pages can be dragged onto folders.
+ * Rows are one line (icon + title); actions appear on hover so they never
+ * squeeze the title. Pages nest: each top-level page opens into its sub-pages.
+ * Drag a page onto a folder to file it, onto another page to nest it, or onto
+ * the Pages zone to make it a top-level page again.
  */
 
 export type DocumentSidebarProps = {
   docs: LocalDocument[]
+  tree: PageTree
   folders: LocalFolder[]
   activeId: string
   trashCount: number
@@ -22,13 +26,17 @@ export type DocumentSidebarProps = {
   textOf: (doc: LocalDocument) => string
   expandedFolders: Set<string>
   onToggleFolder: (id: string) => void
+  expandedPages: Set<string>
+  onTogglePage: (id: string) => void
   onSelect: (id: string) => void
   onCreate: (folderId?: string) => void
+  onCreateSubpage: (parentId: string) => void
+  onNest: (docId: string, parentId: string) => void
   onNewFolder: () => void
   onRenameFolder: (folder: LocalFolder) => void
   onDeleteFolder: (folder: LocalFolder) => void
   onMoveToFolder: (docId: string, folderId?: string) => void
-  onPickFolder: (docId: string) => void
+  onPickDestination: (docId: string) => void
   onTogglePin: (doc: LocalDocument) => void
   onDuplicate: (doc: LocalDocument) => void
   onTrash: (doc: LocalDocument) => void
@@ -39,21 +47,23 @@ export type DocumentSidebarProps = {
 }
 
 export function DocumentSidebar(props: DocumentSidebarProps) {
-  const { docs, folders, activeId, titleOf, textOf, expandedFolders } = props
+  const { docs, tree, folders, activeId, titleOf, textOf, expandedFolders } = props
   const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [dragOver, setDragOver] = useState<string | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
 
   const needle = query.trim().toLowerCase()
   const filtered = needle ? docs.filter(d => titleOf(d.title).toLowerCase().includes(needle) || textOf(d).toLowerCase().includes(needle)) : docs
   const pinned = docs.filter(d => d.isPinned)
-  const loose = docs.filter(d => !d.folderId || !folders.some(f => f.id === d.folderId))
+  // Only top-level pages are filed in folders; sub-pages follow their parent.
+  const loose = tree.roots.filter(d => !d.folderId || !folders.some(f => f.id === d.folderId))
   const modKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+'
 
   const dropProps = (key: string, folderId?: string) => ({
     onDragOver: (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes('application/x-my-space-doc')) return
+      if (!e.dataTransfer.types.includes(DOC_DRAG_TYPE)) return
       e.preventDefault()
       if (dragOver !== key) setDragOver(key)
     },
@@ -61,55 +71,37 @@ export function DocumentSidebar(props: DocumentSidebarProps) {
       if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null)
     },
     onDrop: (e: React.DragEvent) => {
-      const id = e.dataTransfer.getData('application/x-my-space-doc')
+      const id = e.dataTransfer.getData(DOC_DRAG_TYPE)
       setDragOver(null)
+      setDragId(null)
       if (!id) return
       e.preventDefault()
       props.onMoveToFolder(id, folderId)
     },
   })
 
-  const row = (d: LocalDocument, nested = false) => {
-    const active = d.id === activeId
-    return (
-      <div
-        key={d.id}
-        className={`document-row ${active ? 'active' : ''} ${nested ? 'nested' : ''} ${menuFor === d.id ? 'menu-open' : ''}`}
-        draggable
-        onDragStart={e => {
-          e.dataTransfer.setData('application/x-my-space-doc', d.id)
-          e.dataTransfer.effectAllowed = 'move'
-        }}
-      >
-        <button
-          type="button"
-          className="doc-select-btn"
-          onClick={() => props.onSelect(d.id)}
-          aria-current={active ? 'true' : undefined}
-          title={`${titleOf(d.title)} · ${timeAgo(d.updatedAt)}`}
-        >
-          <span className="doc-icon">{d.icon ?? <GoogleIcon name="description" size={17} />}</span>
-          <span className="doc-title">{titleOf(d.title)}</span>
-        </button>
-        <div className="doc-actions">
-          <MenuButton
-            variant="icon"
-            triggerClassName="doc-action-btn"
-            label={t('More actions')}
-            icon={<GoogleIcon name="more_horiz" size={17} />}
-            onOpenChange={open => setMenuFor(open ? d.id : null)}
-            items={[
-              { label: d.isPinned ? t('Remove from Favorites') : t('Add to Favorites'), icon: <GoogleIcon name="star" size={16} fill={d.isPinned} />, onSelect: () => props.onTogglePin(d) },
-              { label: t('Duplicate'), icon: <GoogleIcon name="content_copy" size={16} />, onSelect: () => props.onDuplicate(d) },
-              { label: t('Move to folder'), icon: <GoogleIcon name="drive_file_move" size={16} />, onSelect: () => props.onPickFolder(d.id) },
-              'separator',
-              { label: t('Move to Trash'), icon: <GoogleIcon name="delete" size={16} />, danger: true, onSelect: () => props.onTrash(d) },
-            ]}
-          />
-        </div>
-      </div>
-    )
+  const shared: PageRowShared = {
+    tree,
+    activeId,
+    titleOf,
+    expandedPages: props.expandedPages,
+    menuFor,
+    setMenuFor,
+    dragId,
+    setDragId,
+    dragOver,
+    setDragOver,
+    onTogglePage: props.onTogglePage,
+    onSelect: props.onSelect,
+    onCreateSubpage: props.onCreateSubpage,
+    onNest: props.onNest,
+    onPickDestination: props.onPickDestination,
+    onTogglePin: props.onTogglePin,
+    onDuplicate: props.onDuplicate,
+    onTrash: props.onTrash,
   }
+  const flatRow = (d: LocalDocument) => <SidebarPageRow key={d.id} doc={d} flat shared={shared} />
+  const treeRow = (d: LocalDocument) => <SidebarPageRow key={d.id} doc={d} shared={shared} />
 
   return (
     <aside className="documents" aria-label={t('Documents')}>
@@ -147,14 +139,14 @@ export function DocumentSidebar(props: DocumentSidebarProps) {
         {needle ? (
           <>
             {!filtered.length && <p className="list-empty">{t('Nothing matches “{query}”.', { query: query.trim() })}</p>}
-            {filtered.map(d => row(d))}
+            {filtered.map(flatRow)}
           </>
         ) : (
           <>
             {pinned.length > 0 && (
               <section className="sidebar-section">
                 <div className="folders-section-header">{t('Favorites')}</div>
-                {pinned.map(d => row(d))}
+                {pinned.map(flatRow)}
               </section>
             )}
 
@@ -163,7 +155,7 @@ export function DocumentSidebar(props: DocumentSidebarProps) {
                 <div className="folders-section-header">{t('Folders')}</div>
                 {folders.map(f => {
                   const open = expandedFolders.has(f.id)
-                  const inside = docs.filter(d => d.folderId === f.id)
+                  const inside = tree.roots.filter(d => d.folderId === f.id)
                   return (
                     <div key={f.id} className={`folder-group ${dragOver === f.id ? 'drag-over' : ''}`} {...dropProps(f.id, f.id)}>
                       <div className={`folder-row ${menuFor === f.id ? 'menu-open' : ''}`}>
@@ -200,7 +192,7 @@ export function DocumentSidebar(props: DocumentSidebarProps) {
                       </div>
                       {open && (
                         <div className="folder-contents">
-                          {inside.map(d => row(d, true))}
+                          {inside.map(treeRow)}
                           {!inside.length && (
                             <button type="button" className="folder-add-quick-btn" onClick={() => props.onCreate(f.id)}>
                               <GoogleIcon name="add" size={14} /> {t('Empty folder — add a page')}
@@ -216,7 +208,7 @@ export function DocumentSidebar(props: DocumentSidebarProps) {
 
             <section className={`sidebar-section uncategorized-zone ${dragOver === 'loose' ? 'drag-over' : ''}`} {...dropProps('loose')}>
               {(folders.length > 0 || pinned.length > 0) && <div className="folders-section-header">{t('Pages')}</div>}
-              {loose.map(d => row(d))}
+              {loose.map(treeRow)}
               {!loose.length && folders.length > 0 && <div className="uncategorized-empty-drop">{t('Drop here to remove from folder')}</div>}
               <button type="button" className="docs-add-page" onClick={() => props.onCreate()}>
                 <GoogleIcon name="add" size={16} /> {t('New page')}

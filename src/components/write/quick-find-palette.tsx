@@ -13,6 +13,9 @@ type Entry = { kind: 'doc'; doc: LocalDocument } | { kind: 'create'; title: stri
  * Notion-style Quick Find (Ctrl/⌘+P): type to search titles and text, ↑/↓ to
  * move, Enter to open. With no query it lists recently edited pages; when
  * nothing matches, Enter creates a page with the typed title.
+ *
+ * The same palette picks a page for a "Link to page" block: pass a
+ * `placeholder`, a `createLabel` (e.g. for a new sub-page) and `excludeId`.
  */
 export function QuickFindPalette({
   docs,
@@ -22,6 +25,10 @@ export function QuickFindPalette({
   onOpen,
   onCreate,
   onClose,
+  placeholder = 'Search or jump to a page…',
+  createLabel = 'New page “{title}”',
+  excludeId,
+  pathOf,
 }: {
   docs: LocalDocument[]
   folders: LocalFolder[]
@@ -30,6 +37,11 @@ export function QuickFindPalette({
   onOpen: (id: string) => void
   onCreate: (title: string) => void
   onClose: () => void
+  placeholder?: string
+  createLabel?: string
+  excludeId?: string
+  /** Where a page sits (its parent page), shown instead of the folder name. */
+  pathOf?: (doc: LocalDocument) => string | undefined
 }) {
   const { t } = useI18n()
   const [query, setQuery] = useState('')
@@ -39,13 +51,13 @@ export function QuickFindPalette({
 
   const needle = query.trim().toLowerCase()
   const entries: Entry[] = useMemo(() => {
-    const byRecent = [...docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    const byRecent = docs.filter(d => d.id !== excludeId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     if (!needle) return byRecent.slice(0, 8).map(doc => ({ kind: 'doc' as const, doc }))
     const titleHits = byRecent.filter(d => titleOf(d.title).toLowerCase().includes(needle))
     const textHits = byRecent.filter(d => !titleHits.includes(d) && textOf(d).toLowerCase().includes(needle))
     const found: Entry[] = [...titleHits, ...textHits].slice(0, 20).map(doc => ({ kind: 'doc' as const, doc }))
     return [...found, { kind: 'create' as const, title: query.trim() }]
-  }, [docs, needle, query, titleOf, textOf])
+  }, [docs, needle, query, titleOf, textOf, excludeId])
 
   useEffect(() => {
     input.current?.focus()
@@ -89,7 +101,7 @@ export function QuickFindPalette({
             ref={input}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder={t('Search or jump to a page…')}
+            placeholder={t(placeholder)}
             aria-label={t('Search pages')}
             role="combobox"
             aria-expanded="true"
@@ -105,12 +117,12 @@ export function QuickFindPalette({
               return (
                 <button key="create" type="button" role="option" aria-selected={selected} className="quick-find-item" onMouseEnter={() => setIndex(i)} onClick={() => choose(entry)}>
                   <span className="quick-find-icon"><GoogleIcon name="add" size={18} /></span>
-                  <span className="quick-find-title">{t('New page “{title}”', { title: entry.title })}</span>
+                  <span className="quick-find-title">{t(createLabel, { title: entry.title })}</span>
                 </button>
               )
             }
             const { doc } = entry
-            const folder = folderName(doc.folderId)
+            const folder = pathOf?.(doc) ?? folderName(doc.folderId)
             return (
               <button key={doc.id} type="button" role="option" aria-selected={selected} className="quick-find-item" onMouseEnter={() => setIndex(i)} onClick={() => choose(entry)}>
                 <span className="quick-find-icon">{doc.icon ?? <GoogleIcon name="description" size={18} />}</span>

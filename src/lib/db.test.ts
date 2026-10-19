@@ -21,4 +21,16 @@ describe('backup restore',()=>{
  it('never overwrites a newer local edit; the older backup version becomes a copy',async()=>{const local={...newDocument('Plan'),updatedAt:'2026-09-25T10:00:00.000Z'};await database.documents.put(local);const old={...local,title:'Plan',content:{type:'doc',content:[]},updatedAt:'2026-09-20T10:00:00.000Z'};const r=await importBackup(backupOf([old]),database);expect(r).toEqual({added:0,updated:0,keptAsCopy:1});expect(await database.documents.get(local.id)).toEqual(local);expect((await database.documents.toArray()).map(d=>d.title).sort()).toEqual(['Plan','Plan (from backup)'])})
  it('restores newer and missing items',async()=>{const local={...newDocument('A'),updatedAt:'2026-09-20T10:00:00.000Z'};await database.documents.put(local);const newer={...local,title:'A2',updatedAt:'2026-09-25T10:00:00.000Z'};const r=await importBackup(backupOf([newer,newDocument('B')]),database);expect(r).toEqual({added:1,updated:1,keptAsCopy:0});expect((await database.documents.get(local.id))?.title).toBe('A2')})
  it('rejects a backup with damaged items',()=>expect(()=>parseBackup(backupOf([{id:'x'} as unknown as LocalDocument]))).toThrow(/damaged/))
+ it('accepts backups from before nested pages and keeps sub-pages inside their parents',async()=>{
+  const old=newDocument('Old page');const parent=newDocument('Parent');const child={...newDocument('Child'),parentId:parent.id}
+  const parsed=parseBackup(JSON.parse(JSON.stringify(backupOf([old,parent,child]))))
+  await importBackup(parsed,database)
+  expect((await database.documents.get(old.id))?.parentId).toBeUndefined()
+  expect((await database.documents.get(child.id))?.parentId).toBe(parent.id)
+ })
+ it('imports a page with a malformed parent as a top-level page',()=>{
+  const odd={...newDocument('Odd'),parentId:42} as unknown as LocalDocument;const self={...newDocument('Self')};self.parentId=self.id
+  const parsed=parseBackup(backupOf([odd,self]))
+  expect(parsed.documents.every(d=>!('parentId' in d))).toBe(true)
+ })
 })
