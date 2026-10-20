@@ -1,6 +1,6 @@
 'use client'
 
-import { Aperture, Brush, ChevronLeft, ChevronRight, FileText, PanelsTopLeft, Settings } from 'lucide-react'
+import { Aperture, Brush, ChevronLeft, ChevronRight, Dumbbell, FileText, PanelsTopLeft, Settings } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -14,12 +14,14 @@ import { isTypingTarget } from '@/lib/keyboard-shortcuts'
 import { Modal } from './modal'
 
 const WorkWorkspace = dynamic(() => import('./work/work-workspace'))
+const HealthWorkspace = dynamic(() => import('./health/health-workspace'))
 
 const modes = [
   { href: '/write', label: 'Write', icon: FileText, shortcut: '1' },
   { href: '/create', label: 'Create', icon: Brush, shortcut: '2' },
   { href: '/work', label: 'Work', icon: PanelsTopLeft, shortcut: '3' },
   { href: '/frame', label: 'Frame', icon: Aperture, shortcut: '4' },
+  { href: '/health', label: 'Health', icon: Dumbbell, shortcut: '5' },
 ] as const
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -30,9 +32,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   const [modKey, setModKey] = useState('Ctrl+')
   const onWork = pathname === '/work'
+  const onHealth = pathname === '/health'
   // TanFlow is loaded the first time Work is opened, then kept alive while
-  // other modes are shown so a running timer is not reset.
+  // other modes are shown so a running timer is not reset. Health works the
+  // same way, so a workout in progress (inputs, rest timer) survives a switch.
   const [workOpened, setWorkOpened] = useState(onWork)
+  const [healthOpened, setHealthOpened] = useState(onHealth)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   // Shown unless turned off in Settings (read after mount: localStorage is client-only).
@@ -63,6 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('my-space:last-mode', pathname)
     if (pathname === '/work') setWorkOpened(true)
+    if (pathname === '/health') setHealthOpened(true)
     setFullMode(value => (value.active ? { ...value, active: false } : value))
   }, [pathname])
 
@@ -74,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const command = e.metaKey || e.ctrlKey
-      if (command && !e.altKey && !e.shiftKey && ['1', '2', '3', '4'].includes(e.key)) {
+      if (command && !e.altKey && !e.shiftKey && modes.some(m => m.shortcut === e.key)) {
         e.preventDefault()
         const target = modes[Number(e.key) - 1]
         if (target) router.push(target.href)
@@ -194,6 +200,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {workOpened && (
           <div className="work-host" hidden={!onWork}>
             <WorkWorkspace />
+          </div>
+        )}
+        {healthOpened && (
+          <div className="work-host" hidden={!onHealth}>
+            <HealthWorkspace />
           </div>
         )}
       </main>
