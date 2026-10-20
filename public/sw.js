@@ -4,7 +4,7 @@
 // and boards live in IndexedDB and never pass through here.
 
 const CACHE = 'my-space-v1'
-const SHELL = ['/write', '/create', '/work']
+const SHELL = ['/write', '/create', '/work', '/health']
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).catch(() => {}))

@@ -23,6 +23,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { name: 'Write', url: '/write' },
       { name: 'Create', url: '/create' },
       { name: 'Work', url: '/work' },
+      { name: 'Health', url: '/health' },
     ],
   }
 }

@@ -27,6 +27,7 @@ A calm, private workspace for writing, visual thinking, focused work, polished s
 - **`/create`** — official tldraw SDK with local board management, debounced IndexedDB snapshots, JSON import/export, and tldraw's native image/png/PNG tools.
 - **`/work`** — responsive TanFlow iframe with loading, timeout/error, retry, and safe external-page fallback.
 - **`/frame`** — browser-only screenshot studio with backgrounds, padding, chrome, sizing, copy, and image export.
+- **`/health`** — the "Sổ tập Tân" workout log in an iframe (same shell behaviour as `/work`: kept alive while you switch modes, loading/timeout/error/retry, external-tab fallback). It follows this app's theme and language over `postMessage` and its own duplicate controls (title, theme/language buttons) are hidden when embedded. The camera is delegated to the frame so progress photos can be taken inside it.
 - **`/challenge`** — lightweight daily creative prompts and progress tracking.
 - **`/`** — client redirect to the last opened mode (or Write on first use).
 
@@ -34,7 +35,7 @@ A calm, private workspace for writing, visual thinking, focused work, polished s
 
 Next.js App Router provides route-level splitting. The Tiptap editor and tldraw canvas are dynamically loaded only on their routes. Dexie owns a versioned IndexedDB database (`my-space`) with `documents` and `boards` tables. Small UI preferences and last-opened identifiers use `localStorage`. Persistence failures keep the current in-memory state visible and offer an immediate export path.
 
-No document or board content is sent to this Next.js deployment, TanFlow, analytics, or AI services. TanFlow is a separate third-party page and only loads when Work mode is opened.
+No document or board content is sent to this Next.js deployment, TanFlow, the workout log, analytics, or AI services. TanFlow and the workout log are separate pages and only load when Work or Health mode is opened. Workout data lives in the workout log's own Google Sheet and Vercel Blob, behind its own password, not in this app.
 
 > Browser/site-data clearing deletes IndexedDB. Export backups regularly.
 
@@ -60,6 +61,7 @@ npm run build
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_TANFLOW_URL` | No | TanFlow deployment; defaults to `https://tanflow.vercel.app/`. |
+| `NEXT_PUBLIC_EXERCISE_URL` | No | Workout log deployment for `/health`; defaults to `https://so-tap-tan.vercel.app/`. |
 | `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` | **Production: verify** | Official tldraw SDK license key. Never commit the value. |
 
 ## Licensing and deployment gate

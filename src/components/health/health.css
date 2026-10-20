@@ -1,0 +1,27 @@
+/* The workout log paints its own page colours. Use the same ones behind the frame so
+   the edge of the iframe (and the moment before it has loaded) is invisible. */
+.health-mode .frame-stage {
+  background: #edf0f3;
+}
+
+:root[data-theme='dark'] .health-mode .frame-stage {
+  background: #0d131a;
+}
+
+/* The Vietnamese title and button labels are longer than TanFlow's: keep them on
+   one line and, on phones, show the "open in new tab" button as an icon only. */
+.health-mode .work-title strong,
+.health-mode .work-header-actions .button {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .health-mode .work-header-actions .button {
+    width: 44px;
+    padding: 0;
+  }
+
+  .health-mode .work-header-actions .button span {
+    display: none;
+  }
+}

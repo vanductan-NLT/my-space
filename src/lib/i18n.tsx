@@ -18,6 +18,7 @@ const VI: Record<string, string> = {
   'Create': 'Vẽ',
   'Work': 'Làm việc',
   'Frame': 'Khung ảnh',
+  'Health': 'Sức khỏe',
   'Settings': 'Cài đặt',
   'Collapse': 'Thu gọn',
   'Collapse navigation': 'Thu gọn thanh bên',
@@ -486,6 +487,13 @@ const VI: Record<string, string> = {
     'Trang có thể chặn nhúng, đang offline hoặc tải quá lâu. Cách chắc nhất là mở TanFlow trực tiếp.',
   'Open TanFlow': 'Mở TanFlow',
   'Try again': 'Thử lại',
+
+  // Health
+  'Reload workout log': 'Tải lại sổ tập',
+  'Open workout log in external tab': 'Mở sổ tập ở tab mới',
+  'Opening workout log': 'Đang mở sổ tập',
+  'Workout log could not be embedded': 'Không nhúng được sổ tập',
+  'Open workout log': 'Mở sổ tập',
 }
 
 let current: Lang = 'en'
